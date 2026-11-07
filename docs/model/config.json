@@ -1,0 +1,10 @@
+{
+  "vocab_size": 4096,
+  "max_seq_len": 192,
+  "pad_id": 0,
+  "bos_id": 1,
+  "eos_id": 2,
+  "state_line": true,
+  "checkpoint_step": 1600,
+  "eval_loss": 0.40845412678188747
+}

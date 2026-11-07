@@ -9,6 +9,8 @@ checkpoints/
 # ── Allow web/ assets for GitHub Pages ──────────────────────
 !docs/*.onnx
 !docs/*.json
+!docs/model/*.onnx
+!docs/model/*.json
 
 # ── Python ──────────────────────────────────────────────────
 venv/
@@ -62,3 +64,6 @@ __pycache__/
 # fork: extra training artifacts
 checkpoints_*/
 data_*/
+
+.claude/
+faf*.log

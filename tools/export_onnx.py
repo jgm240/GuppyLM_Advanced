@@ -20,9 +20,9 @@ import sys
 
 import torch
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "guppylm"))
-from config import GuppyConfig
-from model import GuppyLM
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from guppylm.config import GuppyConfig
+from guppylm.model import GuppyLM, load_state_compat
 
 
 def load_env():
@@ -49,6 +49,7 @@ def export_onnx(checkpoint_path, tokenizer_path, output_path, quantize=True, pus
     if os.path.exists(config_json):
         with open(config_json) as f:
             cfg = json.load(f)
+        cfg = cfg.get("model", cfg)          # train.py writes {"model": {...}, "train": {...}}
         config = GuppyConfig(
             vocab_size=cfg.get("vocab_size", 4096),
             max_seq_len=cfg.get("max_position_embeddings", cfg.get("max_seq_len", 128)),
@@ -70,8 +71,9 @@ def export_onnx(checkpoint_path, tokenizer_path, output_path, quantize=True, pus
     # Load model
     state_dict = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
     model = GuppyLM(config)
-    model.load_state_dict({k: v for k, v in state_dict.items() if k in model.state_dict()})
+    load_state_compat(model, state_dict)
     model.eval()
+    model.config = config
 
     total = sum(p.numel() for p in model.parameters())
     print(f"GuppyLM: {total:,} params ({total/1e6:.1f}M)")
@@ -93,6 +95,7 @@ def export_onnx(checkpoint_path, tokenizer_path, output_path, quantize=True, pus
             "logits": {0: "batch", 1: "seq_len"},
         },
         opset_version=17,
+        dynamo=False,
     )
 
     size_mb = os.path.getsize(output_path) / 1e6
@@ -114,6 +117,12 @@ def export_onnx(checkpoint_path, tokenizer_path, output_path, quantize=True, pus
         q_size_mb = os.path.getsize(output_path) / 1e6
         print(f"Quantized {output_path} ({q_size_mb:.1f} MB, uint8)")
         os.remove(fp32_path)
+
+    with open(os.path.join(out_dir, "config.json"), "w") as f:
+        json.dump({"vocab_size": config.vocab_size, "max_seq_len": config.max_seq_len,
+                   "pad_id": config.pad_id, "bos_id": config.bos_id, "eos_id": config.eos_id,
+                   "state_line": True, "checkpoint_step": ckpt.get("step") if isinstance(ckpt, dict) else None,
+                   "eval_loss": ckpt.get("eval_loss") if isinstance(ckpt, dict) else None}, f, indent=2)
 
     # Copy tokenizer alongside the ONNX model (needed for web/ GitHub Pages demo)
     tok_dest = os.path.join(out_dir, "tokenizer.json")
@@ -143,9 +152,9 @@ def export_onnx(checkpoint_path, tokenizer_path, output_path, quantize=True, pus
 
 def main():
     parser = argparse.ArgumentParser(description="Export GuppyLM to ONNX")
-    parser.add_argument("--checkpoint", default="checkpoints/best_model.pt")
+    parser.add_argument("--checkpoint", default="checkpoints_world2/best_model.pt")
     parser.add_argument("--tokenizer", default="data/tokenizer.json")
-    parser.add_argument("--output", default="docs/model.onnx")
+    parser.add_argument("--output", default="docs/model/model.onnx")
     parser.add_argument("--no-quantize", action="store_true", help="Skip uint8 quantization")
     parser.add_argument("--push", action="store_true", help="Upload to HuggingFace repo")
     args = parser.parse_args()

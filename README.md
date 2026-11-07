@@ -2,8 +2,10 @@
   <img src="assets/guppy.png" alt="GuppyLM" width="400"/>
 </p>
 
-<h1 align="center">GuppyLM</h1>
-<p align="center"><em>A ~9M parameter LLM that talks like a small fish.</em></p>
+<h1 align="center">GuppyLM_Advanced</h1>
+<p align="center"><em>A ~9M parameter LLM that talks like a small fish. Now with memory, a tank, friends and lessons.</em></p>
+<p align="center"><a href="https://jgm240.github.io/GuppyLM_Advanced/"><b>🐠 Swim with Guppy and see how it works →</b></a></p>
+<p align="center"><sub>A fork of <a href="https://github.com/arman-bd/guppylm">arman-bd/guppylm</a> (MIT). The Python package is still named <code>guppylm</code>.</sub></p>
 
 <p align="center">
   <a href="https://huggingface.co/datasets/arman-bd/guppylm-60k-generic"><img src="https://img.shields.io/badge/🤗_Dataset-guppylm--60k-blue" alt="Dataset"/></a>&nbsp;

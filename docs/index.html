@@ -1,622 +1,765 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="light">
+<!doctype html>
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GuppyLM — Chat with a Fish</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GuppyLM_Advanced — a tiny fish brain you can talk to</title>
+<meta name="description" content="A 9M-parameter language model that talks like a fish, running entirely in your browser. Chat with a swimming Guppy and see exactly how it works.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐠</text></svg>">
 <style>
-  /* ── Light theme (default) ── */
-  :root, [data-theme="light"] {
-    --bg: #f5f7fa; --surface: #ffffff; --border: #e0e4ea;
-    --text: #1a1a2e; --dim: #6b7280; --accent: #0891b2;
-    --bubble-user: #e0f2fe; --bubble-fish: #ffffff;
-    --logo-shadow: rgba(0,0,0,0.08);
-  }
-  /* ── Dark theme ── */
-  [data-theme="dark"] {
-    --bg: #0a1628; --surface: #112240; --border: #1e3a5f;
-    --text: #ccd6f6; --dim: #8892b0; --accent: #64ffda;
-    --bubble-user: #1e3a5f; --bubble-fish: #0d2137;
-    --logo-shadow: rgba(0,0,0,0.3);
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-    background: var(--bg); color: var(--text);
-    display: flex; flex-direction: column; height: 100vh;
-    transition: background 0.3s, color 0.3s;
-  }
-
-  /* ── Header ── */
-  header {
-    padding: 16px 20px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 12px;
-  }
-  header img.logo { width: 36px; height: 36px; object-fit: contain; }
-  header h1 { font-size: 16px; font-weight: 600; }
-  header .tag {
-    font-size: 11px; color: var(--accent); border: 1px solid var(--accent);
-    padding: 2px 8px; border-radius: 12px;
-  }
-  header .spacer { margin-left: auto; }
-  header .status { font-size: 12px; color: var(--dim); }
-  #theme-toggle {
-    background: none; border: 1px solid var(--border); border-radius: 6px;
-    padding: 4px 8px; cursor: pointer; font-size: 16px; line-height: 1;
-  }
-
-  /* ── Badges bar ── */
-  #badges {
-    padding: 8px 20px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  }
-  #badges a img { height: 20px; }
-  #badges-toggle {
-    display: none; background: none; border: 1px solid var(--border);
-    border-radius: 6px; padding: 2px 8px; cursor: pointer;
-    font-size: 11px; color: var(--dim); font-family: inherit;
-  }
-  #badges .extra { display: inline; }
-
-  @media (max-width: 600px) {
-    #badges-toggle { display: inline-block; }
-    #badges .extra { display: none; }
-    #badges .extra.show { display: inline; }
-    header .tag { display: none; }
-    header .status { font-size: 11px; }
-  }
-
-  /* ── Chat ── */
-  #chat {
-    flex: 1; overflow-y: auto; padding: 20px;
-    display: flex; flex-direction: column; gap: 12px;
-  }
-  .msg {
-    max-width: 80%; padding: 10px 14px; border-radius: 12px;
-    font-size: 14px; line-height: 1.5; display: flex; gap: 10px; align-items: flex-start;
-  }
-  .msg.user {
-    align-self: flex-end; background: var(--bubble-user);
-    border-bottom-right-radius: 4px; flex-direction: row-reverse;
-  }
-  .msg.fish {
-    align-self: flex-start; background: var(--bubble-fish);
-    border: 1px solid var(--border); border-bottom-left-radius: 4px;
-  }
-  .msg .emoji { font-size: 20px; flex-shrink: 0; line-height: 1; }
-  .msg .body { display: flex; flex-direction: column; }
-  .msg .label { font-size: 11px; color: var(--dim); margin-bottom: 2px; }
-  .msg.user .label { text-align: right; }
-  .msg.fish .label { color: var(--accent); }
-  .typing { color: var(--dim); font-style: italic; font-size: 13px; padding: 4px 14px; }
-
-  /* ── Sample prompts ── */
-  #samples {
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; flex: 1; gap: 16px; padding: 40px 20px;
-  }
-  #samples img { width: 72px; height: 72px; object-fit: contain; opacity: 0.85; }
-  #samples .title { font-size: 15px; font-weight: 600; }
-  #samples .subtitle { font-size: 12px; color: var(--dim); }
-  #samples .pills {
-    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 500px;
-  }
-  #samples .pill {
-    background: var(--surface); border: 1px solid var(--border);
-    padding: 8px 14px; border-radius: 20px; font-size: 13px;
-    cursor: pointer; transition: border-color 0.2s;
-    font-family: inherit; color: var(--text);
-  }
-  #samples .pill:hover { border-color: var(--accent); }
-
-  /* ── Input ── */
-  #input-row {
-    padding: 16px 20px; border-top: 1px solid var(--border);
-    display: flex; gap: 10px;
-  }
-  #input-row input {
-    flex: 1; background: var(--surface); border: 1px solid var(--border);
-    color: var(--text); padding: 10px 14px; border-radius: 8px;
-    font-family: inherit; font-size: 14px; outline: none;
-  }
-  #input-row input:focus { border-color: var(--accent); }
-  #input-row input::placeholder { color: var(--dim); }
-  #input-row button {
-    background: var(--accent); color: white; border: none;
-    padding: 10px 20px; border-radius: 8px; font-family: inherit;
-    font-size: 14px; font-weight: 600; cursor: pointer;
-  }
-  [data-theme="dark"] #input-row button { color: #0a1628; }
-  #input-row button:disabled { opacity: 0.4; cursor: not-allowed; }
-  #hint-btn {
-    background: none; border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px; cursor: pointer; font-size: 16px; line-height: 1;
-    color: var(--dim); transition: border-color 0.2s;
-  }
-  #hint-btn:hover { border-color: var(--accent); }
-
-  /* ── Topics popup ── */
-  #topics-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
-    display: flex; align-items: center; justify-content: center; z-index: 100;
-  }
-  #topics-box {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; padding: 20px 24px; max-width: 480px; width: 90%;
-    max-height: 80vh; overflow-y: auto;
-  }
-  #topics-box h3 { font-size: 14px; margin-bottom: 12px; }
-  #topics-box .topics {
-    display: flex; flex-wrap: wrap; gap: 6px;
-  }
-  #topics-box .topic {
-    font-size: 12px; padding: 4px 10px; border-radius: 14px;
-    background: var(--bg); border: 1px solid var(--border);
-    color: var(--text); cursor: pointer; font-family: inherit;
-    transition: border-color 0.2s;
-  }
-  #topics-box .topic:hover { border-color: var(--accent); }
-  #topics-box .close-btn {
-    margin-top: 14px; display: block; width: 100%; padding: 8px;
-    background: none; border: 1px solid var(--border); border-radius: 8px;
-    font-family: inherit; font-size: 13px; color: var(--dim); cursor: pointer;
-  }
-
-  /* ── Loading ── */
-  #loading {
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; flex: 1; gap: 16px; color: var(--dim);
-  }
-  #loading img { width: 80px; height: 80px; object-fit: contain; opacity: 0.8; }
-  #loading .spinner {
-    width: 32px; height: 32px; border: 3px solid var(--border);
-    border-top-color: var(--accent); border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .hidden { display: none !important; }
+:root{
+  --bg:#06121e; --bg2:#0a1c2e; --panel:#0f2740; --panel2:#143252; --line:#1f4a73;
+  --text:#e4f3ff; --muted:#8fb4d0; --accent:#ffa94d; --accent2:#5cd1ff; --good:#5ce0a0; --bad:#ff7a7a;
+  --code:#071826; --shadow:0 10px 40px rgba(0,0,0,.35);
+}
+:root[data-theme="light"]{
+  --bg:#f3faff; --bg2:#e7f4fc; --panel:#ffffff; --panel2:#eaf5fc; --line:#c4def0;
+  --text:#0d2a40; --muted:#4f6f86; --accent:#e07a10; --accent2:#0a84c1; --good:#12a05f; --bad:#d64545;
+  --code:#eef6fb; --shadow:0 10px 30px rgba(20,60,100,.12);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent2)}
+code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+code{background:var(--code);padding:.1em .4em;border-radius:6px;font-size:.9em}
+pre{background:var(--code);border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow:auto;font-size:13.5px;line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:18px;height:54px}
+nav b{font-size:17px;letter-spacing:.2px}
+nav b span{color:var(--accent)}
+nav a{color:var(--muted);text-decoration:none;font-size:14px}
+nav a:hover{color:var(--text)}
+nav .sp{flex:1}
+button,select,input{font:inherit;color:inherit}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 12px;cursor:pointer;font-size:14px;color:var(--text);white-space:nowrap}
+.btn:hover{border-color:var(--accent2)}
+.btn.on{background:var(--accent);color:#2a1500;border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:default}
+header.hero{padding:34px 0 10px;text-align:center}
+header.hero h1{margin:0;font-size:clamp(30px,5vw,50px);letter-spacing:-.5px}
+header.hero h1 span{color:var(--accent)}
+header.hero p{margin:10px auto 0;max-width:720px;color:var(--muted);font-size:18px}
+.tankbox{position:relative;border-radius:18px;overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--line);margin-top:22px;background:#0b4f7c}
+#tank{display:block;width:100%;height:clamp(360px,54vw,540px);cursor:pointer;touch-action:manipulation}
+.bubble{position:absolute;left:0;top:0;max-width:260px;background:#fff;color:#1b2b44;border:2px solid #28507a;border-radius:14px;padding:8px 12px;font-size:15px;line-height:1.35;pointer-events:none;transition:opacity .4s;opacity:0;z-index:3}
+.bubble.show{opacity:1}
+.bubble::after{content:"";position:absolute;left:var(--tx,50%);bottom:-9px;width:14px;height:14px;background:#fff;border-right:2px solid #28507a;border-bottom:2px solid #28507a;transform:translateX(-50%) rotate(45deg)}
+.bubble.below::after{bottom:auto;top:-9px;transform:translateX(-50%) rotate(225deg)}
+.hud{position:absolute;left:12px;top:10px;color:#fff;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,.6);z-index:2;display:flex;gap:12px;flex-wrap:wrap}
+#loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:18px;color:#fff;font-size:14px;background:linear-gradient(transparent 55%,rgba(0,20,40,.55));pointer-events:none;transition:opacity .5s;z-index:4}
+#loading.hidden{opacity:0}
+.bar{width:220px;height:6px;border-radius:6px;background:rgba(255,255,255,.25);margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.controls{text-align:left;display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+.controls .grp{display:flex;gap:6px;align-items:center;padding:4px 8px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.controls .grp small{color:var(--muted);font-size:12px;margin-right:2px}
+.chat{display:flex;gap:8px;margin-top:12px}
+.chat input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:16px;outline:none;min-width:0}
+.chat input:focus{border-color:var(--accent2)}
+.target{display:none;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--accent);color:var(--accent);border-radius:999px;padding:2px 10px;font-size:13px;cursor:pointer}
+.target.show{display:inline-flex}
+.log{text-align:left;margin-top:10px;max-height:150px;overflow:auto;font-size:14.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.log div{padding:2px 0}.log b{color:var(--accent)}.log .u b{color:var(--accent2)}
+.status{font-size:13px;color:var(--muted);margin-top:8px}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:13px;cursor:pointer;color:var(--muted)}
+.pill:hover{color:var(--text);border-color:var(--accent)}
+section{padding:54px 0 8px}
+section h2{font-size:clamp(24px,3.4vw,34px);margin:0 0 6px;letter-spacing:-.3px}
+section h2 em{font-style:normal;color:var(--accent)}
+section .lead{color:var(--muted);font-size:17px;max-width:760px;margin:0 0 22px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 18px 16px}
+.card h3{margin:0 0 6px;font-size:18px}
+.card p{margin:.4em 0;color:var(--muted)}
+.num{display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#2a1500;font-weight:700;align-items:center;justify-content:center;margin-right:8px;font-size:15px}
+.tag{display:inline-block;font-size:12px;border-radius:999px;padding:1px 9px;border:1px solid var(--line);color:var(--muted);margin-right:4px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.chip{border-radius:6px;padding:2px 6px;font-size:13px;font-family:ui-monospace,Menlo,monospace;border:1px solid var(--line);background:var(--code);position:relative;white-space:pre}
+.chip small{display:block;font-size:10px;color:var(--muted);text-align:center}
+.prompt{white-space:pre-wrap;font-size:13.5px;line-height:1.55}
+.prompt .sys{color:var(--accent2)}.prompt .usr{color:var(--text)}.prompt .ast{color:var(--accent)}.prompt .tok{opacity:.45}
+.meter{height:10px;border-radius:8px;background:var(--code);border:1px solid var(--line);overflow:hidden;margin:8px 0 2px}
+.meter i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));width:0}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.5px}
+.flow{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;justify-content:center}
+.flow .step{flex:1 1 170px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:160px;position:relative}
+.flow .step b{display:block;margin-bottom:4px}
+.flow .step p{margin:0;color:var(--muted);font-size:14px}
+.flow .arrow{align-self:center;color:var(--accent);font-size:22px}
+.note{border-left:3px solid var(--accent);background:var(--panel);padding:10px 14px;border-radius:0 12px 12px 0;color:var(--muted);margin:14px 0}
+.hi{color:var(--accent)}
+.ok{color:var(--good)}.warn{color:var(--bad)}
+textarea.tk{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:15px;resize:vertical;outline:none;min-height:60px}
+footer{margin-top:70px;border-top:1px solid var(--line);padding:30px 0 50px;color:var(--muted);font-size:14px}
+@media(max-width:640px){.hud{font-size:12px}.controls .grp small{display:none}nav a.hide-sm{display:none}}
 </style>
 </head>
 <body>
+<nav><div class="wrap">
+  <b>🐠 Guppy<span>LM_Advanced</span></b>
+  <a class="hide-sm" href="#how">How it works</a>
+  <a class="hide-sm" href="#live">Live under the hood</a>
+  <a class="hide-sm" href="#tank">Tank &amp; mates</a>
+  <a class="hide-sm" href="#run">Run it</a>
+  <span class="sp"></span>
+  <a href="https://github.com/jgm240/GuppyLM_Advanced">GitHub</a>
+  <button class="btn" id="theme" title="toggle theme">☀︎</button>
+</div></nav>
 
-<header>
-  <img class="logo" src="guppy.png" alt="Guppy" />
-  <h1>GuppyLM</h1>
-  <span class="tag">9M params &middot; WASM</span>
-  <span class="spacer"></span>
-  <span class="status" id="status">loading...</span>
-  <button id="theme-toggle" title="Toggle dark/light mode">&#9790;</button>
-</header>
+<header class="hero"><div class="wrap">
+  <h1>A tiny <span>fish brain</span> you can talk to</h1>
+  <p>Guppy is an 8.7-million-parameter language model. It lives in your browser, knows what’s in its tank, remembers what you just said, and thinks about food a lot.</p>
 
-<div id="badges">
-  <a href="https://github.com/arman-bd/guppylm"><img src="https://img.shields.io/badge/GitHub-guppylm-181717?logo=github" alt="GitHub"/></a>
-  <button id="badges-toggle">more &#9662;</button>
-  <a class="extra" href="https://huggingface.co/arman-bd/guppylm-9M"><img src="https://img.shields.io/badge/🤗_Model-guppylm--9M-orange" alt="Model"/></a>
-  <a class="extra" href="https://huggingface.co/datasets/arman-bd/guppylm-60k-generic"><img src="https://img.shields.io/badge/🤗_Dataset-guppylm--60k-blue" alt="Dataset"/></a>
-  <a class="extra" href="https://github.com/arman-bd/guppylm/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"/></a>
-  <a class="extra" href="https://colab.research.google.com/github/arman-bd/guppylm/blob/main/train_guppylm.ipynb"><img src="https://img.shields.io/badge/Train-Colab-F9AB00?logo=googlecolab" alt="Train"/></a>
-  <a class="extra" href="https://colab.research.google.com/github/arman-bd/guppylm/blob/main/use_guppylm.ipynb"><img src="https://img.shields.io/badge/Chat-Colab-F9AB00?logo=googlecolab" alt="Chat"/></a>
-  <a class="extra" href="https://www.linkedin.com/pulse/build-your-own-language-model-5-minutes-i-made-mine-hossain--supif/"><img src="https://img.shields.io/badge/Article-LinkedIn-0A66C2?logo=linkedin" alt="LinkedIn"/></a>
-  <a class="extra" href="https://arman-bd.medium.com/build-your-own-llm-in-5-minutes-i-made-mine-talk-like-a-fish-e20c338a3d14"><img src="https://img.shields.io/badge/Article-Medium-000000?logo=medium" alt="Medium"/></a>
-</div>
-
-<div id="loading">
-  <img src="guppy.png" alt="Guppy" />
-  <div class="spinner"></div>
-  <div>downloading model &amp; tokenizer...</div>
-  <div id="load-detail" style="font-size: 12px;"></div>
-</div>
-
-<div id="samples" class="hidden">
-  <img src="guppy.png" alt="Guppy" />
-  <div class="title">Chat with Guppy</div>
-  <div class="subtitle">9M parameter LLM running locally in your browser</div>
-  <div class="pills">
-    <button class="pill" data-msg="hi guppy">hi guppy</button>
-    <button class="pill" data-msg="are you hungry">are you hungry</button>
-    <button class="pill" data-msg="do you like bubbles">do you like bubbles</button>
-    <button class="pill" data-msg="tell me a joke">tell me a joke</button>
-    <button class="pill" data-msg="what is the meaning of life">meaning of life</button>
-    <button class="pill" data-msg="the cat is looking at you">the cat is here</button>
-    <button class="pill" data-msg="do you love me">do you love me</button>
-    <button class="pill" data-msg="goodnight guppy">goodnight guppy</button>
+  <div class="tankbox" id="tankbox">
+    <canvas id="tank"></canvas>
+    <div class="hud"><span id="hud-eaten">🍽 0</span><span id="hud-mood">mood: happy</span><span id="hud-fish">🐠 1</span></div>
+    <div id="loading"><span id="load-text">loading Guppy’s brain…</span><div class="bar"><i id="load-bar"></i></div></div>
   </div>
-</div>
 
-<div id="chat" class="hidden"></div>
+  <div class="controls" aria-label="Tank controls">
+    <div class="grp"><small>feed</small><button class="btn" id="b-feed">🍽 flakes</button></div>
+    <div class="grp"><small>drop in</small>
+      <select class="btn" id="item"><option>rock</option><option>castle</option><option>plant</option><option>shell</option><option>anchor</option><option>chest</option><option>ball</option><option>skull</option><option>log</option></select>
+      <button class="btn" id="b-drop">＋</button><button class="btn" id="b-clear" title="remove all objects">✕</button></div>
+    <div class="grp"><small>friends</small><button class="btn" id="b-add">＋ fish</button><button class="btn" id="b-rm">－</button></div>
+    <div class="grp"><small>tricks</small>
+      <button class="btn" data-trick="spin">spin</button><button class="btn" data-trick="loop">loop</button>
+      <button class="btn" data-trick="jump">jump</button><button class="btn" data-trick="dance">dance</button></div>
+    <div class="grp"><button class="btn" id="b-tap">👆 tap</button><button class="btn" id="b-light">💡 lights</button><button class="btn" id="b-forget">🧠 forget</button></div>
+  </div>
 
-<div id="input-row" class="hidden">
-  <button id="hint-btn" title="What can Guppy talk about?">&#x1F4A1;</button>
-  <input type="text" id="user-input" placeholder="say something to guppy..." autocomplete="off" />
-  <button id="send-btn" onclick="send()">send</button>
-</div>
+  <div class="chat">
+    <span class="target" id="target" title="click to clear">@<span id="target-name"></span> ✕</span>
+    <input id="msg" placeholder="Say something to Guppy…  (click a fish to talk to it)" autocomplete="off" disabled>
+    <button class="btn" id="send" disabled>send</button>
+  </div>
+  <div class="pills" id="pills"></div>
+  <div class="log" id="log" hidden></div>
+  <div class="status" id="status">Click the water to drop food · double-click to tap the glass.</div>
+</div></header>
 
-<div id="topics-overlay" class="hidden"></div>
+<main class="wrap">
+
+<section id="how">
+  <h2>How Guppy <em>works</em></h2>
+  <p class="lead">No magic: a small transformer, trained from scratch on conversations a script wrote about being a fish. The same recipe as the big models, just small enough to fit in a browser tab.</p>
+  <div class="flow">
+    <div class="step"><b><span class="num">1</span>Write the data</b><p>A generator composes ~60k short chats from templates: 86 topics, hundreds of fish-isms.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><b><span class="num">2</span>Tokenize</b><p>A byte-level BPE tokenizer with 4,096 tokens turns text into numbers.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><b><span class="num">3</span>Train</b><p>A 6-layer transformer learns one thing: predict the next token.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><b><span class="num">4</span>Sample</b><p>At chat time it predicts a token, picks one, repeats, until it says “end”.</p></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:22px">
+    <div class="card">
+      <h3>The model</h3>
+      <table>
+        <tr><th>Parameters</th><td>8.75 M</td></tr>
+        <tr><th>Layers × heads</th><td>6 × 6, width 384, FFN 768 (ReLU)</td></tr>
+        <tr><th>Vocabulary</th><td>4,096 byte-level BPE tokens</td></tr>
+        <tr><th>Context window</th><td>192 tokens <span class="tag">128 in the original</span></td></tr>
+        <tr><th>Norm / position</th><td>LayerNorm, learned position embeddings</td></tr>
+        <tr><th>Output head</th><td>weight-tied with the token embeddings</td></tr>
+      </table>
+      <p>It’s a vanilla decoder-only transformer. In the browser it runs as an 8-bit quantized ONNX file (~10&nbsp;MB) on WebAssembly.</p>
+    </div>
+    <div class="card">
+      <h3>What a training example looks like</h3>
+<pre class="prompt"><span class="tok">&lt;|im_start|&gt;</span><span class="sys">system
+you: guppy | tank: castle, snail | mood: hungry | doing: swimming</span><span class="tok">&lt;|im_end|&gt;</span>
+<span class="tok">&lt;|im_start|&gt;</span><span class="usr">user
+are you hungry</span><span class="tok">&lt;|im_end|&gt;</span>
+<span class="tok">&lt;|im_start|&gt;</span><span class="ast">assistant
+yes. so hungry. please feed me.</span><span class="tok">&lt;|im_end|&gt;</span></pre>
+      <p>The grey markers are special tokens. The model is trained to continue this text, so “being Guppy” just means continuing it the way the data does.</p>
+    </div>
+  </div>
+
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><h3>Why it sounds like a fish</h3><p>Every reply in the training data is short, lowercase, and about water, food, light and bubbles. The personality isn’t a prompt. It’s baked into the weights.</p></div>
+    <div class="card"><h3>Why it’s a bit dumb</h3><p>8.7 M parameters can memorise patterns, not facts about the world. Ask it who wrote Hamlet and it was <em>taught</em> to shrug and ask about food.</p></div>
+    <div class="card"><h3>Why it varies</h3><p>Replies are sampled (temperature ≈ 0.8, top-k 60), not looked up, and recent answers are resampled so Guppy doesn’t repeat itself.</p></div>
+  </div>
+</section>
+
+<section id="live">
+  <h2>Live <em>under the hood</em></h2>
+  <p class="lead">Everything below updates as you chat with the fish above.</p>
+  <div class="grid g2">
+    <div class="card">
+      <h3>What Guppy actually sees</h3>
+      <p>This exact text, tokenized, is the model’s entire world for this reply.</p>
+      <div class="prompt mono" id="seen">Say something to Guppy to see the prompt.</div>
+      <div class="meter"><i id="ctx-bar"></i></div>
+      <small style="color:var(--muted)" id="ctx-text">0 / 192 tokens of context used</small>
+    </div>
+    <div class="card">
+      <h3>How it picked the last reply</h3>
+      <p>Each chip is one token Guppy generated. Darker = more confident. Hover for the alternatives it nearly picked.</p>
+      <div class="chips" id="trace"><span style="color:var(--muted)">nothing yet</span></div>
+      <p id="trace-meta"></p>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>Tokenizer playground</h3>
+    <p>Type anything. This is the real tokenizer the model uses, running in your browser.</p>
+    <textarea class="tk" id="tk-in" rows="2">hello guppy, do you like bubbles?</textarea>
+    <div class="chips" id="tk-out"></div>
+    <p id="tk-meta"></p>
+  </div>
+</section>
+
+<section id="tank">
+  <h2>Tank, memory, <em>mates</em></h2>
+  <p class="lead">A bare language model has no body. Everything that makes Guppy feel alive is plain text fed to it, plus a little animation around it.</p>
+  <div class="grid g3">
+    <div class="card"><h3>🧠 It knows its tank</h3>
+      <p>Before every message the page writes a one-line <code>state</code> describing the tank: what’s in it, who’s with Guppy, its mood (hungry, full, sleepy, scared) and what it’s doing. The model was trained on thousands of random states, so “what’s in your tank?” can be answered from the line instead of invented.</p></div>
+    <div class="card"><h3>💬 It remembers (briefly)</h3>
+      <p>The conversation so far is pasted into the prompt on every turn. The window is only 192 tokens, so when it fills up the <em>oldest</em> exchanges are dropped. Guppy can recall your name for a few turns, then it’s gone.</p></div>
+    <div class="card"><h3>🐟 Friends with personalities</h3>
+      <p>Add a fish and it gets its own state line (<code>you: bob the grumpy betta</code>). The same weights speak in four voices: cheerful, grumpy, shy and greedy. Occasionally two fish chat to each other, each one’s reply fed to the other as if a user had said it.</p></div>
+    <div class="card"><h3>🎪 Tricks &amp; reactions</h3>
+      <p>Spins, loops and jumps are drawn by ordinary animation code. The model just gets a line like “do a spin” and reacts; it can’t actually see the animation.</p></div>
+    <div class="card"><h3>🍽 Hunger is a timer</h3>
+      <p>The page counts how long since each fish ate and writes <code>mood: hungry</code> or <code>full</code> into the state. Feed it, ask “are you hungry?”, and watch the answer change.</p></div>
+    <div class="card"><h3>🎓 Teaching it (desktop app)</h3>
+      <p>In the desktop client, <code>/train "Money is a currency."</code> turns a fact into practice chats and genuinely fine-tunes the weights for a minute, mixing in old data so it doesn’t forget how to be a fish.</p></div>
+  </div>
+  <div class="note">Honest limits: this is a ~9M model, so it sometimes garbles names, miscounts what’s in the tank, or answers a neighbouring question. The model on this page is <b id="model-info">…</b>.</div>
+</section>
+
+<section id="run">
+  <h2>Run it <em>yourself</em></h2>
+  <p class="lead">Everything is open source. You can train your own fish in a few minutes.</p>
+<pre>git clone https://github.com/jgm240/GuppyLM_Advanced && cd GuppyLM_Advanced
+python3 -m venv .venv && .venv/bin/pip install torch tokenizers numpy
+
+# make the data (86 topics, state lines, mates, follow-ups) and train a model
+.venv/bin/python -m guppylm prepare
+.venv/bin/python -m guppylm world-data
+.venv/bin/python -m guppylm train --init checkpoints/best_model.pt --data data_world --out checkpoints_world
+
+# talk to it
+.venv/bin/python -m guppylm chat
+.venv/bin/python -m guppylm tank       # colored ASCII aquarium
+.venv/bin/pip install PySide6-Essentials &amp;&amp; .venv/bin/python -m guppylm tank-gui   # desktop aquarium
+
+# put your model on this page
+.venv/bin/pip install onnx onnxruntime onnxscript &amp;&amp; .venv/bin/python tools/export_onnx.py</pre>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  <b>GuppyLM_Advanced</b> is a fork of <a href="https://github.com/arman-bd/guppylm">arman-bd/guppylm</a> (MIT), the original “train your own tiny LLM” project.
+  This fork adds multi-turn memory, a tank-state prompt, tank mates, tricks, events, <code>/train</code>, two aquarium clients and this page.
+  The byte-level BPE tokenizer in this page is a JavaScript port of the Hugging Face implementation, adapted from the original demo.
+  <br><br>Everything runs locally in your browser. Nothing you type is sent anywhere.
+</div></footer>
 
 <script type="module">
-// ── Config ──────────────────────────────────────────────────────────
-const MODEL_BASE = ".";
-const CONFIG = {
-  vocab_size: 4096, max_seq_len: 128, d_model: 384,
-  n_layers: 6, n_heads: 6, ffn_hidden: 768,
-  pad_id: 0, bos_id: 1, eos_id: 2,
+// ═══════════════════════════════════════════════════════════════════
+//  Config + helpers
+// ═══════════════════════════════════════════════════════════════════
+const $ = (id) => document.getElementById(id);
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rgba = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let CFG = { vocab_size: 4096, max_seq_len: 192, eos_id: 2 };
+const GEN = { temperature: 0.8, top_k: 60, max_tokens: 40 };
+
+// theme
+const root = document.documentElement;
+const savedTheme = (() => { try { return localStorage.getItem("gl-theme"); } catch (e) { return null; } })();
+if (savedTheme) root.setAttribute("data-theme", savedTheme);
+else if (window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches) root.setAttribute("data-theme", "light");
+const syncTheme = () => { $("theme").textContent = root.getAttribute("data-theme") === "dark" ? "☀︎" : "☾"; };
+syncTheme();
+$("theme").onclick = () => {
+  const n = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  root.setAttribute("data-theme", n); syncTheme();
+  try { localStorage.setItem("gl-theme", n); } catch (e) {}
 };
-const GEN = { temperature: 0.7, top_k: 50, max_tokens: 32 };
 
-// ── Globals ─────────────────────────────────────────────────────────
-let session = null;
-let tokenizer = null;
-let chatStarted = false;
-
-// ── Theme toggle ────────────────────────────────────────────────────
-const themeBtn = document.getElementById("theme-toggle");
-themeBtn.addEventListener("click", () => {
-  const html = document.documentElement;
-  const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
-  html.setAttribute("data-theme", next);
-  themeBtn.textContent = next === "dark" ? "\u2600" : "\u263E";
-  localStorage.setItem("theme", next);
-});
-// Restore saved preference
-const saved = localStorage.getItem("theme");
-if (saved) {
-  document.documentElement.setAttribute("data-theme", saved);
-  themeBtn.textContent = saved === "dark" ? "\u2600" : "\u263E";
-}
-
-// ── Mobile badges toggle ────────────────────────────────────────────
-document.getElementById("badges-toggle").addEventListener("click", function() {
-  const extras = document.querySelectorAll("#badges .extra");
-  const open = extras[0]?.classList.contains("show");
-  extras.forEach(el => el.classList.toggle("show", !open));
-  this.textContent = open ? "more \u25BE" : "less \u25B4";
-});
-
-// ── ONNX Runtime ────────────────────────────────────────────────────
-import("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.mjs").then(async (ort) => {
-  window.ort = ort;
-  ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/";
-  await load(ort);
-});
-
-// ── Load model + tokenizer ──────────────────────────────────────────
-async function load(ort) {
-  const detail = document.getElementById("load-detail");
-
-  detail.textContent = "loading tokenizer...";
-  const tokResp = await fetch(`${MODEL_BASE}/tokenizer.json`);
-  const tokJson = await tokResp.json();
-  tokenizer = buildTokenizer(tokJson);
-
-  detail.textContent = "loading model (~10 MB)...";
-  const modelResp = await fetch(`${MODEL_BASE}/model.onnx`);
-  const modelBuf = await modelResp.arrayBuffer();
-  session = await ort.InferenceSession.create(modelBuf, {
-    executionProviders: ["wasm"],
-  });
-
-  document.getElementById("loading").classList.add("hidden");
-  document.getElementById("samples").classList.remove("hidden");
-  document.getElementById("input-row").classList.remove("hidden");
-  document.getElementById("status").textContent = "ready — running locally in your browser";
-  document.getElementById("user-input").focus();
-
-  // Verify tokenizer
-  const testIds = tokenizer.encode("<|im_start|>user\nhi guppy<|im_end|>\n<|im_start|>assistant\n");
-  const expected = [1, 88, 64, 779, 278, 2, 64, 1, 89, 64];
-  const match = testIds.length === expected.length && testIds.every((v, i) => v === expected[i]);
-  console.log("Tokenizer check:", match ? "PASS" : "FAIL", testIds, "expected:", expected);
-}
-
-// ── Sample prompt pills ─────────────────────────────────────────────
-document.querySelectorAll(".pill").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.getElementById("user-input").value = btn.dataset.msg;
-    send();
-  });
-});
-
-// ── ByteLevel BPE tokenizer (JS port of HuggingFace tokenizers) ─────
+// ═══════════════════════════════════════════════════════════════════
+//  Byte-level BPE tokenizer (JS port of Hugging Face tokenizers; adapted from the original GuppyLM demo, MIT)
+// ═══════════════════════════════════════════════════════════════════
 function buildTokenizer(json) {
-  const vocab = json.model.vocab;
-  const merges = json.model.merges;
-  const added = {};
+  const vocab = json.model.vocab, merges = json.model.merges, added = {};
   for (const t of json.added_tokens) added[t.content] = t.id;
-
   const id2token = {};
   for (const [tok, id] of Object.entries(vocab)) id2token[id] = tok;
   for (const [tok, id] of Object.entries(added)) id2token[id] = tok;
-
-  // Byte-to-unicode mapping (matches HuggingFace bytes_to_unicode)
-  const byte2char = {};
-  const char2byte = {};
-  const ranges = [
-    [33, 126], [161, 172], [174, 255],
-  ];
-  const direct = new Set();
-  for (const [lo, hi] of ranges) for (let b = lo; b <= hi; b++) direct.add(b);
+  const byte2char = {}, char2byte = {}, direct = new Set();
+  for (const [lo, hi] of [[33, 126], [161, 172], [174, 255]]) for (let b = lo; b <= hi; b++) direct.add(b);
   let n = 0;
-  for (let b = 0; b < 256; b++) {
-    if (direct.has(b)) {
-      byte2char[b] = String.fromCharCode(b);
-    } else {
-      byte2char[b] = String.fromCharCode(256 + n);
-      n++;
-    }
-  }
+  for (let b = 0; b < 256; b++) byte2char[b] = direct.has(b) ? String.fromCharCode(b) : String.fromCharCode(256 + n++);
   for (const [b, c] of Object.entries(byte2char)) char2byte[c] = parseInt(b);
-
-  // Merge rank lookup
   const mergeRank = {};
-  for (let i = 0; i < merges.length; i++) {
-    const key = Array.isArray(merges[i]) ? merges[i].join(" ") : merges[i];
-    mergeRank[key] = i;
-  }
-
-  function bytesToTokenStr(bytes) {
-    return Array.from(bytes).map(b => byte2char[b]).join("");
-  }
-
-  function tokenStrToBytes(s) {
-    return Uint8Array.from([...s].map(c => char2byte[c] ?? c.charCodeAt(0)));
-  }
-
-  function bpe(word) {
+  merges.forEach((m, i) => { mergeRank[Array.isArray(m) ? m.join(" ") : m] = i; });
+  const bpe = (word) => {
     if (word.length <= 1) return word;
-    let pieces = word.slice();
-    while (pieces.length > 1) {
-      let bestRank = Infinity, bestIdx = -1;
-      for (let i = 0; i < pieces.length - 1; i++) {
-        const pair = pieces[i] + " " + pieces[i + 1];
-        const rank = mergeRank[pair];
-        if (rank !== undefined && rank < bestRank) {
-          bestRank = rank;
-          bestIdx = i;
-        }
-      }
-      if (bestIdx === -1) break;
-      const merged = pieces[bestIdx] + pieces[bestIdx + 1];
-      pieces = [...pieces.slice(0, bestIdx), merged, ...pieces.slice(bestIdx + 2)];
+    let p = word.slice();
+    while (p.length > 1) {
+      let best = Infinity, bi = -1;
+      for (let i = 0; i < p.length - 1; i++) { const r = mergeRank[p[i] + " " + p[i + 1]]; if (r !== undefined && r < best) { best = r; bi = i; } }
+      if (bi === -1) break;
+      p = [...p.slice(0, bi), p[bi] + p[bi + 1], ...p.slice(bi + 2)];
     }
-    return pieces;
-  }
-
+    return p;
+  };
   const PAT = /'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+/gu;
-
+  const specialRe = new RegExp("(" + Object.keys(added).map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")");
+  const enc = new TextEncoder();
   function encode(text) {
-    const specialPattern = Object.keys(added)
-      .map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-      .join("|");
-    const specialRe = new RegExp(`(${specialPattern})`);
-    const segments = text.split(specialRe);
-
     const ids = [];
-    for (const seg of segments) {
+    for (const seg of text.split(specialRe)) {
       if (seg === "") continue;
-      if (added[seg] !== undefined) {
-        ids.push(added[seg]);
-        continue;
-      }
-      const words = seg.match(PAT) || [seg];
-      for (const word of words) {
-        const bytes = new TextEncoder().encode(word);
-        const byteChars = [...bytesToTokenStr(bytes)];
-        const tokens = bpe(byteChars);
-        for (const tok of tokens) {
-          const id = vocab[tok];
-          if (id !== undefined) ids.push(id);
-        }
+      if (added[seg] !== undefined) { ids.push(added[seg]); continue; }
+      for (const word of seg.match(PAT) || [seg]) {
+        for (const tok of bpe([...[...enc.encode(word)].map(b => byte2char[b])])) { const id = vocab[tok]; if (id !== undefined) ids.push(id); }
       }
     }
     return ids;
   }
-
-  function decode(ids) {
-    const parts = [];
-    for (const id of ids) {
-      const tok = id2token[id];
-      if (!tok || added[tok] !== undefined) continue;
-      parts.push(tok);
-    }
-    const allBytes = tokenStrToBytes(parts.join(""));
-    return new TextDecoder("utf-8", { fatal: false }).decode(allBytes);
-  }
-
-  return { encode, decode };
+  const tokText = (id) => {
+    const tok = id2token[id]; if (tok === undefined) return "";
+    if (added[tok] !== undefined) return tok;
+    return new TextDecoder("utf-8", { fatal: false }).decode(Uint8Array.from([...tok].map(c => char2byte[c] ?? c.charCodeAt(0))));
+  };
+  const decode = (ids) => {
+    const parts = ids.map(i => id2token[i]).filter(t => t && added[t] === undefined);
+    return new TextDecoder("utf-8", { fatal: false }).decode(Uint8Array.from([...parts.join("")].map(c => char2byte[c] ?? c.charCodeAt(0))));
+  };
+  return { encode, decode, tokText };
 }
 
-// ── Inference (autoregressive generation) ───────────────────────────
-async function generate(inputIds) {
-  const ort = window.ort;
-  let ids = inputIds.slice();
+// ═══════════════════════════════════════════════════════════════════
+//  Model (onnxruntime-web)
+// ═══════════════════════════════════════════════════════════════════
+let session = null, tokenizer = null, ort = null;
 
+async function loadModel() {
+  const setP = (p, t) => { $("load-bar").style.width = p + "%"; if (t) $("load-text").textContent = t; };
+  try {
+    setP(5, "loading tokenizer…");
+    try { CFG = { ...CFG, ...(await (await fetch("model/config.json")).json()) }; } catch (e) {}
+    tokenizer = buildTokenizer(await (await fetch("model/tokenizer.json")).json());
+    setP(15, "loading the runtime…");
+    ort = await import("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.mjs");
+    ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/";
+    setP(30, "downloading Guppy’s brain (~10 MB)…");
+    const resp = await fetch("model/model.onnx");
+    const total = +resp.headers.get("content-length") || 10.5e6;
+    const reader = resp.body.getReader(); const chunks = []; let got = 0;
+    for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; setP(30 + 60 * Math.min(1, got / total)); }
+    const buf = new Uint8Array(got); let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
+    setP(92, "waking Guppy up…");
+    session = await ort.InferenceSession.create(buf, { executionProviders: ["wasm"] });
+    setP(100);
+    $("loading").classList.add("hidden");
+    $("msg").disabled = false; $("send").disabled = false;
+    $("status").textContent = "Ready. Guppy is running locally in your browser.";
+    const step = CFG.checkpoint_step, ev = CFG.eval_loss;
+    $("model-info").textContent = step ? `a checkpoint from training step ${step.toLocaleString()}${ev ? ` (eval loss ${(+ev).toFixed(2)})` : ""}` : "a small trained checkpoint";
+    renderTokenizer();
+  } catch (err) {
+    console.error(err);
+    $("load-text").textContent = "couldn’t load the model (" + (err.message || err) + "). The tank still works!";
+    $("model-info").textContent = "not loaded";
+  }
+}
+
+async function generate(ids, temperature) {
+  const V = CFG.vocab_size, out = [], trace = [];
+  const seqBase = ids.slice();
   for (let i = 0; i < GEN.max_tokens; i++) {
-    const seq = ids.slice(-CONFIG.max_seq_len);
-    const tensor = new ort.Tensor("int64",
-      BigInt64Array.from(seq.map(BigInt)), [1, seq.length]);
-    const out = await session.run({ input_ids: tensor });
-    const logits = out.logits.data;
-
-    const offset = (seq.length - 1) * CONFIG.vocab_size;
-    const lastLogits = new Float32Array(CONFIG.vocab_size);
-    for (let v = 0; v < CONFIG.vocab_size; v++) {
-      lastLogits[v] = logits[offset + v];
-    }
-
-    if (GEN.temperature !== 1.0) {
-      for (let v = 0; v < CONFIG.vocab_size; v++) {
-        lastLogits[v] /= GEN.temperature;
-      }
-    }
-
-    if (GEN.top_k > 0) {
-      const sorted = [...lastLogits].sort((a, b) => b - a);
-      const cutoff = sorted[Math.min(GEN.top_k, sorted.length) - 1];
-      for (let v = 0; v < CONFIG.vocab_size; v++) {
-        if (lastLogits[v] < cutoff) lastLogits[v] = -Infinity;
-      }
-    }
-
-    const maxVal = Math.max(...lastLogits.filter(v => v !== -Infinity));
-    let sumExp = 0;
-    const probs = new Float32Array(CONFIG.vocab_size);
-    for (let v = 0; v < CONFIG.vocab_size; v++) {
-      probs[v] = Math.exp(lastLogits[v] - maxVal);
-      sumExp += probs[v];
-    }
-    for (let v = 0; v < CONFIG.vocab_size; v++) probs[v] /= sumExp;
-
-    let r = Math.random(), acc = 0, nextId = 0;
-    for (let v = 0; v < CONFIG.vocab_size; v++) {
-      acc += probs[v];
-      if (acc >= r) { nextId = v; break; }
-    }
-
-    ids.push(nextId);
-    if (nextId === CONFIG.eos_id) break;
+    const seq = seqBase.concat(out).slice(-CFG.max_seq_len);
+    const res = await session.run({ input_ids: new ort.Tensor("int64", BigInt64Array.from(seq.map(BigInt)), [1, seq.length]) });
+    const off = (seq.length - 1) * V, lg = new Float32Array(V);
+    for (let v = 0; v < V; v++) lg[v] = res.logits.data[off + v] / temperature;
+    const order = Array.from({ length: V }, (_, v) => v).sort((a, b) => lg[b] - lg[a]).slice(0, GEN.top_k);
+    const mx = lg[order[0]]; let sum = 0; const pr = order.map(v => { const e = Math.exp(lg[v] - mx); sum += e; return e; });
+    let r = Math.random() * sum, k = 0; for (; k < pr.length - 1; k++) { r -= pr[k]; if (r <= 0) break; }
+    const id = order[k];
+    trace.push({ id, p: pr[k] / sum, alts: order.slice(0, 3).map((v, j) => ({ id: v, p: pr[j] / sum })) });
+    if (id === CFG.eos_id) break;
+    out.push(id);
   }
-
-  return ids.slice(inputIds.length);
+  return { ids: out, trace };
 }
 
-// ── Chat logic ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  Prompt building: state line + history, exactly like the desktop client
+// ═══════════════════════════════════════════════════════════════════
+const histories = {}, recent = {};
+function stateText(f) {
+  const tank = world.items.map(i => i.name).slice(-3);
+  const others = world.fish.filter(x => x !== f).map(x => x.name).slice(0, 2);
+  const who = f === world.guppy ? "guppy" : `${f.name} the ${f.persona} ${f.species}`;
+  const parts = [`you: ${who}`];
+  if (tank.length) parts.push("tank: " + tank.join(", "));
+  if (others.length) parts.push("with: " + others.join(", "));
+  parts.push("mood: " + moodOf(f)); parts.push("doing: " + doingOf(f));
+  return parts.join(" | ");
+}
+const fmtMsgs = (msgs) => msgs.map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>`).join("\n") + "\n<|im_start|>assistant\n";
+function fit(msgs, budget) {
+  const head = msgs.slice(0, 1); let rest = msgs.slice(1);
+  while (rest.length > 1 && tokenizer.encode(fmtMsgs(head.concat(rest))).length > budget) rest = rest.length > 2 ? rest.slice(2) : rest.slice(1);
+  return head.concat(rest);
+}
+async function reply(fish, text, { remember = true } = {}) {
+  if (!session) return "…";
+  const hist = histories[fish.name] = histories[fish.name] || [];
+  const msgs = fit([{ role: "system", content: stateText(fish) }, ...hist, { role: "user", content: text }], CFG.max_seq_len - 48);
+  const prompt = fmtMsgs(msgs), ids = tokenizer.encode(prompt), seen = recent[fish.name] = recent[fish.name] || [];
+  let best = null;
+  for (let a = 0; a < 4; a++) {
+    const r = await generate(ids, GEN.temperature + 0.12 * a);
+    let t = tokenizer.decode(r.ids).split("<|im_end|>")[0].split("<|im_start|>")[0].trim() || "blub.";
+    best = { text: t, trace: r.trace };
+    if (!seen.includes(t)) break;
+  }
+  seen.push(best.text); seen.splice(0, Math.max(0, seen.length - 10));
+  if (remember) { hist.push({ role: "user", content: text }, { role: "assistant", content: best.text }); hist.splice(0, Math.max(0, hist.length - 12)); }
+  showTrace(prompt, ids.length, best.trace);
+  return best.text;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  World: fish, items, physics
+// ═══════════════════════════════════════════════════════════════════
+const PALETTES = {
+  guppy: { top: [255, 120, 30], mid: [255, 165, 50], bot: [255, 225, 150], tail0: [255, 110, 40], tail1: [240, 50, 70], fin: [240, 70, 60], size: 1.0, tail: 1.0, bodyH: 1.0 },
+  "neon tetra": { top: [30, 70, 190], mid: [70, 140, 230], bot: [235, 245, 255], tail0: [200, 70, 70], tail1: [230, 100, 100], fin: [220, 80, 80], size: 0.55, tail: 0.8, bodyH: 0.8, stripe: [80, 255, 240] },
+  betta: { top: [120, 20, 160], mid: [190, 50, 190], bot: [250, 150, 230], tail0: [200, 40, 160], tail1: [90, 20, 180], fin: [210, 60, 170], size: 0.9, tail: 1.7, bodyH: 0.85 },
+  goldfish: { top: [255, 140, 10], mid: [255, 190, 60], bot: [255, 245, 220], tail0: [255, 150, 40], tail1: [255, 80, 40], fin: [255, 120, 40], size: 1.15, tail: 1.2, bodyH: 1.25 },
+};
+const SPECIES = ["betta", "neon tetra", "goldfish", "guppy"], PERSONAS = ["cheerful", "grumpy", "shy", "greedy"];
+const NAMES = ["bob", "pearl", "coral", "dot", "nemo", "splash", "pip", "fin", "mochi", "ziggy"];
+const SPEED = { cheerful: 2.4, grumpy: 1.8, shy: 1.6, greedy: 2.6 };
+const OPENERS = ["hi. want to swim together", "i found a nice spot", "did you see the food", "this is my rock", "i'm bored. race me", "look at the bubbles", "are you hungry", "i love this tank"];
+const TRICK_PROMPTS = { spin: ["do a spin", "do a barrel roll", "do a flip"], loop: ["do a loop", "do a loop the loop"], jump: ["jump out of the water", "jump"], dance: ["dance for me", "can you dance", "show me a trick"] };
+const TRICK_LEN = { spin: 1.4, loop: 2.2, jump: 1.6, dance: 3.0 };
+
+const world = { t: 0, fish: [], items: [], bubbles: [], flakes: [], particles: [], eaten: 0, dark: false, flash: 0, w: 900, h: 520, dpr: 1 };
+function newFish(name, species, persona, x, y) {
+  return { name, species, persona, pal: PALETTES[species] || PALETTES.guppy, x, y, vx: 0, vy: 0, dir: 1, tx: x, ty: y, rot: 0, roll: 0, dash: 0,
+    eating: false, lastAte: performance.now(), trick: null, speed: SPEED[persona] || 2.2, say: "", sayUntil: 0, el: null };
+}
+world.guppy = newFish("guppy", "guppy", null, 300, 200);
+world.fish.push(world.guppy);
+const U = () => clamp(Math.min(world.w / 960, world.h / 600), 0.5, 1.4);
+const floorY = () => world.h * 0.84;
+
+function moodOf(f) {
+  if (f.dash > 0) return "scared";
+  if (world.dark) return "sleepy";
+  const ate = (performance.now() - f.lastAte) / 1000;
+  return ate < 40 ? "full" : ate > 120 ? "hungry" : "happy";
+}
+const doingOf = (f) => f.trick ? "spinning" : f.eating ? "eating" : f.dash > 0 ? "hiding" : "swimming";
+
+function dropFood(n = 8, x = null) { for (let i = 0; i < n; i++) world.flakes.push({ x: (x ?? rand(40, world.w - 40)) + rand(-25, 25), y: rand(10, 50), rest: 0, ph: rand(0, 6) }); }
+function burst(n = 30) { for (let i = 0; i < n; i++) world.bubbles.push({ x: world.guppy.x + rand(-60, 60), y: floorY() - rand(0, 30), sp: rand(1, 2.6), r: rand(3, 11), ph: rand(0, 6) }); }
+function say(f, text, secs = 7) { f.say = text; f.sayUntil = performance.now() + secs * 1000; }
+function startTrick(name) { const g = world.guppy; g.trick = { name, t0: world.t, dur: TRICK_LEN[name], x0: g.x, y0: Math.min(g.y, floorY() - 170), dir: g.dir }; }
+
+function runTrick(g) {
+  const tr = g.trick, u = (world.t - tr.t0) / tr.dur;
+  if (u >= 1) { g.trick = null; g.rot = 0; g.roll = 0; g.tx = g.x; g.ty = g.y; return; }
+  const { x0, y0, dir: d, name } = tr; g.dir = d; const s = U();
+  if (name === "spin") { g.x = x0; g.y = y0; g.roll = u * 2 * Math.PI; g.rot = 0; if (Math.random() < .3) world.bubbles.push({ x: g.x, y: g.y, sp: 1.5, r: rand(3, 6), ph: 0 }); }
+  else if (name === "loop") {
+    const R = 85 * s, th = u * 2 * Math.PI;
+    g.x = x0 + d * R * Math.sin(th); g.y = y0 + R - R * Math.cos(th);
+    const heading = Math.atan2(-Math.sin(th), d * Math.cos(th));
+    g.rot = d > 0 ? heading : heading - Math.PI; g.roll = 0;
+  } else if (name === "jump") {
+    const top = 26; g.x = x0 + d * u * 140 * s; g.y = y0 + (top - y0) * (4 * u * (1 - u));
+    g.rot = clamp(((top - y0) * (4 - 8 * u)) / 400, -.8, .8) * (d > 0 ? 1 : -1) * .8;
+    if (u > .45 && u < .55 && Math.random() < .6) world.bubbles.push({ x: g.x + rand(-30, 30), y: 24, sp: rand(.5, 1.5), r: rand(3, 6), ph: 0 });
+  } else {
+    g.x = x0 + Math.sin(u * 14) * 28 * s; g.y = y0 + Math.sin(u * 28) * 8; g.rot = Math.sin(u * 14) * .25; g.roll = 0;
+    if (Math.random() < .08) world.particles.push({ x: g.x, y: g.y - 40, ch: pick(["♪", "♫", "♥"]), t: world.t });
+  }
+  g.x = clamp(g.x, 70, world.w - 70);
+}
+
+function stepFish(f) {
+  const w = world.w, fl = floorY(), s = U();
+  if (f === world.guppy && f.trick) { runTrick(f); return; }
+  const live = world.flakes.filter(x => x.rest === 0), targets = live.length ? live : world.flakes;
+  let speed = f.speed; f.eating = false;
+  if (targets.length) {
+    let best = targets[0], bd = 1e9; for (const x of targets) { const d = Math.abs(x.x - f.x) + Math.abs(x.y - f.y); if (d < bd) { bd = d; best = x; } }
+    f.tx = best.x; f.ty = best.y; speed = f.speed * (f.persona === "greedy" ? 2.2 : 2.0); f.eating = true;
+    if (Math.hypot(best.x - f.x - 45 * s * f.dir * f.pal.size, best.y - f.y) < 30 * s) { world.flakes.splice(world.flakes.indexOf(best), 1); f.lastAte = performance.now(); if (f === world.guppy) world.eaten++; }
+  } else if (f.dash > 0) {
+    speed = f.speed * 3; if (Math.floor(f.dash) % 22 === 0) { f.tx = rand(80, w - 80); f.ty = rand(60, fl - 100); }
+  } else if (Math.hypot(f.tx - f.x, f.ty - f.y) < 25 || Math.random() < .004) {
+    f.tx = rand(80, w - 80); f.ty = rand(70, fl - 110);
+    if (f.persona === "cheerful") { f.tx = world.guppy.x + rand(-160, 160); f.ty = world.guppy.y + rand(-70, 70); }
+  }
+  f.dash = Math.max(0, f.dash - 1);
+  for (const o of world.fish) if (o !== f && Math.hypot(o.x - f.x, o.y - f.y) < 70 * s) { f.vx -= (o.x - f.x) * .002; f.vy -= (o.y - f.y) * .002; }
+  const dx = f.tx - f.x, dy = f.ty - f.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / 80);
+  f.vx += (dx / d * speed * k - f.vx) * .05; f.vy += (dy / d * speed * k - f.vy) * .05;
+  f.x += f.vx; f.y += f.vy + Math.sin(world.t * 2.2 + f.name.length) * .15;
+  f.x = clamp(f.x, 70, w - 70); f.y = clamp(f.y, 40, fl - 40);
+  if (Math.abs(f.vx) > .35) f.dir = f.vx > 0 ? 1 : -1;
+  f.rot = clamp(f.vy * 3, -18, 18) * Math.PI / 180;
+}
+
+function tick() {
+  world.t += 1 / 60;
+  const fl = floorY(), w = world.w;
+  if (Math.random() < .05) world.bubbles.push({ x: Math.random() < .5 ? world.guppy.x : rand(20, w - 20), y: fl - 5, sp: rand(.6, 1.6), r: rand(2, 7), ph: rand(0, 6) });
+  for (const b of world.bubbles) { b.y -= b.sp; b.x += Math.sin(world.t * 2 + b.ph) * .3; }
+  world.bubbles = world.bubbles.filter(b => b.y > 14);
+  for (const f of world.flakes) { if (f.y < fl - 6) { f.y += .9; f.x += Math.sin(world.t * 2 + f.ph) * .35; } else f.rest += 1 / 60; }
+  world.flakes = world.flakes.filter(f => f.rest < 3);
+  for (const it of world.items) { const rest = fl + 4; if (it.y < rest) { it.y = Math.min(rest, it.y + 2.6); it.x += Math.sin(world.t * 3 + it.ph) * .5; } }
+  world.particles = world.particles.filter(p => world.t - p.t < 1.6);
+  world.flash = Math.max(0, world.flash - .02);
+  for (const f of world.fish) stepFish(f);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Rendering (Canvas 2D)
+// ═══════════════════════════════════════════════════════════════════
+const canvas = $("tank"), ctx = canvas.getContext("2d");
+const rnd = (() => { let s = 11; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+const plants = Array.from({ length: 9 }, () => ({ x: rnd(), h: .18 + rnd() * .16, col: pick([[46, 160, 90], [70, 190, 110], [30, 130, 100]]), off: rnd() * 6 }));
+const pebbles = Array.from({ length: 140 }, () => ({ x: rnd(), y: rnd(), r: 2 + rnd() * 4, col: pick([[200, 170, 120], [170, 140, 100], [225, 200, 150], [150, 130, 110]]) }));
+const rocks = Array.from({ length: 4 }, () => ({ x: .08 + rnd() * .82, s: 34 + rnd() * 36 }));
+
+function resize() {
+  const r = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+  world.dpr = dpr; world.w = r.width; world.h = r.height;
+  canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+}
+new ResizeObserver(resize).observe(canvas); resize();
+
+function lin(x0, y0, x1, y1, stops) { const g = ctx.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, c]) => g.addColorStop(o, c)); return g; }
+function rad(x, y, r, stops) { const g = ctx.createRadialGradient(x, y, 0, x, y, r); stops.forEach(([o, c]) => g.addColorStop(o, c)); return g; }
+function arcQt(cx, cy, rx, ry, a0, span) { ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(.01, rx), Math.max(.01, ry), 0, -(a0 + span) * Math.PI / 180, -a0 * Math.PI / 180); ctx.stroke(); }
+
+function paintRock(x, y, s) {
+  ctx.fillStyle = rad(x - s * .2, y - s * .5, s, [[0, "rgb(170,170,180)"], [1, "rgb(70,75,90)"]]); ctx.strokeStyle = "rgba(40,45,60,.6)"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x - s, y); ctx.bezierCurveTo(x - s, y - s * .9, x - s * .3, y - s * 1.1, x + s * .2, y - s * .8);
+  ctx.bezierCurveTo(x + s * .9, y - s * .8, x + s * 1.1, y - s * .2, x + s, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+function paintPlant(x, y, ht, col, off, u) {
+  for (let k = 0; k < 3; k++) {
+    const sway = Math.sin(world.t * 1.2 + off + k) * 22 * u, bx = x + (k - 1) * 12 * u, hh = ht * (.75 + .25 * ((k + 1) % 3) / 2);
+    ctx.strokeStyle = rgba([col[0] - 12 * k, col[1] - 14 * k, col[2]], .92); ctx.lineWidth = 9 * u; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(bx, y + 6); ctx.bezierCurveTo(bx - sway, y - hh * .4, x + (k - 1) * 18 * u + sway, y - hh * .7, x + (k - 1) * 10 * u + sway * 1.5, y - hh); ctx.stroke();
+  }
+}
+function paintCastle(x, y, s) {
+  const block = (rx, ry, rw, rh, c) => { ctx.fillStyle = lin(rx, ry, rx + rw, ry, [[0, `rgb(${c.map(v => Math.min(255, v * 1.12 | 0))})`], [1, `rgb(${c.map(v => v * .85 | 0)})`]]); ctx.strokeStyle = "rgb(70,50,110)"; ctx.lineWidth = 2; ctx.fillRect(rx, ry, rw, rh); ctx.strokeRect(rx, ry, rw, rh); };
+  const body = [150, 120, 190], light = [185, 160, 220];
+  block(x, y - 110 * s, 160 * s, 110 * s, body);
+  for (const tx of [x - 18 * s, x + 128 * s]) {
+    block(tx, y - 150 * s, 50 * s, 150 * s, light);
+    for (let k = 0; k < 3; k++) block(tx + k * 18 * s, y - 166 * s, 14 * s, 18 * s, light);
+    ctx.fillStyle = "rgb(210,60,80)"; ctx.beginPath(); ctx.moveTo(tx + 25 * s, y - 166 * s); ctx.lineTo(tx + 25 * s, y - 196 * s); ctx.lineTo(tx + 52 * s, y - 184 * s); ctx.fill();
+  }
+  for (let k = 0; k < 5; k++) block(x + 8 * s + k * 30 * s, y - 126 * s, 18 * s, 18 * s, body);
+  ctx.fillStyle = "rgb(25,20,50)"; ctx.beginPath(); ctx.moveTo(x + 62 * s, y); ctx.lineTo(x + 62 * s, y - 50 * s); ctx.ellipse(x + 80 * s, y - 50 * s, 18 * s, 30 * s, 0, Math.PI, 2 * Math.PI); ctx.lineTo(x + 98 * s, y); ctx.fill();
+  ctx.fillStyle = "rgba(255,230,120,.8)"; for (const wx of [14, 146]) { ctx.beginPath(); ctx.ellipse(x + wx * s, y - 80 * s, 6 * s, 9 * s, 0, 0, 7); ctx.fill(); }
+}
+function paintItem(it, u) {
+  const { name, x, y } = it, s = u; ctx.strokeStyle = "rgba(30,30,40,.6)"; ctx.lineWidth = 1.5;
+  const rr = (rx, ry, rw, rh, r) => { ctx.beginPath(); ctx.roundRect(rx, ry, rw, rh, r); };
+  if (name === "rock") paintRock(x, y, 40 * s);
+  else if (name === "castle") paintCastle(x - 80 * s, y, s * .6);
+  else if (name === "plant") paintPlant(x, y, 110 * s, [60, 180, 100], it.ph, u);
+  else if (name === "log") { ctx.fillStyle = lin(x, y - 24 * s, x, y, [[0, "rgb(150,100,60)"], [1, "rgb(90,55,30)"]]); rr(x - 60 * s, y - 28 * s, 120 * s, 28 * s, 12 * s); ctx.fill(); ctx.stroke(); ctx.fillStyle = "rgb(200,150,100)"; ctx.beginPath(); ctx.ellipse(x + 56 * s, y - 14 * s, 8 * s, 14 * s, 0, 0, 7); ctx.fill(); }
+  else if (name === "shell") { ctx.fillStyle = "rgb(250,190,200)"; ctx.beginPath(); ctx.moveTo(x - 28 * s, y); ctx.ellipse(x, y, 28 * s, 50 * s, 0, Math.PI, 2 * Math.PI); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.strokeStyle = "rgb(200,120,140)"; for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + k * 11 * s, y - 40 * s + Math.abs(k) * 6 * s); ctx.stroke(); } }
+  else if (name === "chest") { ctx.fillStyle = "rgb(140,90,40)"; rr(x - 40 * s, y - 36 * s, 80 * s, 36 * s, 4 * s); ctx.fill(); ctx.stroke(); ctx.fillStyle = "rgb(170,110,50)"; ctx.beginPath(); ctx.ellipse(x, y - 36 * s, 40 * s, 26 * s, 0, Math.PI, 2 * Math.PI); ctx.fill(); ctx.stroke(); ctx.fillStyle = "rgb(255,215,60)"; ctx.fillRect(x - 6 * s, y - 40 * s, 12 * s, 16 * s); for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.ellipse(x - 24 * s + k * 16 * s, y - 38 * s - (k % 2) * 4 * s, 6 * s, 4 * s, 0, 0, 7); ctx.fill(); } }
+  else if (name === "anchor") { ctx.strokeStyle = "rgb(100,110,125)"; ctx.lineWidth = 7 * s; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 70 * s); ctx.moveTo(x - 18 * s, y - 56 * s); ctx.lineTo(x + 18 * s, y - 56 * s); ctx.stroke(); ctx.beginPath(); ctx.arc(x, y - 78 * s, 7 * s, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.ellipse(x, y - 12 * s, 34 * s, 28 * s, 0, .3, Math.PI - .3); ctx.stroke(); }
+  else if (name === "skull") { ctx.fillStyle = "rgb(235,232,220)"; ctx.beginPath(); ctx.ellipse(x, y - 26 * s, 24 * s, 22 * s, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.fillRect(x - 12 * s, y - 14 * s, 24 * s, 14 * s); ctx.fillStyle = "rgb(25,25,30)"; for (const dx of [-9, 9]) { ctx.beginPath(); ctx.ellipse(x + dx * s, y - 28 * s, 6 * s, 7 * s, 0, 0, 7); ctx.fill(); } }
+  else if (name === "ball") { ctx.fillStyle = rad(x - 8 * s, y - 40 * s, 36 * s, [[0, "rgb(255,140,140)"], [1, "rgb(190,40,60)"]]); ctx.beginPath(); ctx.arc(x, y - 26 * s, 26 * s, 0, 7); ctx.fill(); ctx.stroke(); }
+  else { ctx.fillStyle = "rgb(190,150,90)"; rr(x - 38 * s, y - 52 * s, 76 * s, 52 * s, 5 * s); ctx.fill(); ctx.stroke(); ctx.fillStyle = "rgb(60,40,20)"; ctx.font = `bold ${Math.max(9, 11 * s)}px sans-serif`; ctx.textAlign = "center"; ctx.fillText(name.slice(0, 12), x, y - 24 * s); ctx.textAlign = "left"; }
+}
+function paintBubble(b, u) { const r = b.r * u; ctx.fillStyle = rad(b.x - r * .3, b.y - r * .3, r * 1.2, [[0, "rgba(255,255,255,.47)"], [.7, "rgba(190,235,255,.16)"], [1, "rgba(255,255,255,.43)"]]); ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, 7); ctx.fill(); ctx.stroke(); ctx.fillStyle = "rgba(255,255,255,.75)"; ctx.beginPath(); ctx.arc(b.x - r * .35, b.y - r * .35, r * .22, 0, 7); ctx.fill(); }
+
+function paintFish(f, u) {
+  const p = f.pal, L = 150 * u * p.size, tl = p.tail, bh = p.bodyH, t = world.t;
+  const fast = Math.abs(f.vx) + (f.trick && f.trick.name === "dance" ? 4 : 0);
+  const wag = Math.sin(t * (5 + fast * 2.5)) * (.07 + fast * .03) * L * Math.sqrt(tl);
+  ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); ctx.scale(f.dir, 1); if (f.roll) ctx.scale(1, Math.cos(f.roll));
+  const tg = ctx.createLinearGradient(-.3 * L, 0, -.62 * L * tl, 0); tg.addColorStop(0, rgba(p.tail0)); tg.addColorStop(1, rgba(p.tail1, .8));
+  ctx.fillStyle = tg; ctx.beginPath(); ctx.moveTo(-.28 * L, 0);
+  ctx.bezierCurveTo(-.45 * L * tl, -.10 * L + wag * .4, -.62 * L * tl, -.30 * L * bh + wag, -.66 * L * tl, -.26 * L * bh + wag);
+  ctx.bezierCurveTo(-.55 * L * tl, -.08 * L + wag * .6, -.55 * L * tl, .08 * L + wag * .6, -.66 * L * tl, .26 * L * bh + wag);
+  ctx.bezierCurveTo(-.62 * L * tl, .30 * L * bh + wag, -.45 * L * tl, .10 * L + wag * .4, -.28 * L, 0); ctx.fill();
+  ctx.fillStyle = rgba(p.fin, .86); ctx.beginPath(); ctx.moveTo(.12 * L, -.2 * L * bh); ctx.bezierCurveTo(0, -.42 * L * bh + wag * .3, -.18 * L, -.40 * L * bh + wag * .5, -.24 * L, -.12 * L * bh); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(.5 * L, .02 * L); ctx.bezierCurveTo(.38 * L, -.30 * L * bh, -.12 * L, -.34 * L * bh, -.32 * L, -.05 * L); ctx.lineTo(-.32 * L, .05 * L); ctx.bezierCurveTo(-.12 * L, .34 * L * bh, .38 * L, .30 * L * bh, .5 * L, .02 * L);
+  ctx.fillStyle = lin(0, -.3 * L * bh, 0, .3 * L * bh, [[0, rgba(p.top)], [.55, rgba(p.mid)], [1, rgba(p.bot)]]); ctx.fill();
+  ctx.strokeStyle = rgba(p.top.map(c => c * .55 | 0), .8); ctx.lineWidth = 2; ctx.stroke();
+  if (p.stripe) { ctx.strokeStyle = rgba(p.stripe, .9); ctx.lineWidth = Math.max(2, .05 * L); ctx.beginPath(); ctx.moveTo(.38 * L, 0); ctx.lineTo(-.3 * L, 0); ctx.stroke(); }
+  ctx.strokeStyle = "rgba(255,255,255,.22)"; ctx.lineWidth = 2; for (let k = 0; k < 4; k++) arcQt(-.12 * L + k * .14 * L, 0, .1 * L, .15 * L * bh, 100, 160);
+  ctx.save(); ctx.translate(.12 * L, .08 * L); ctx.rotate((Math.sin(t * 6) * 14 - 20) * Math.PI / 180); ctx.fillStyle = rgba(p.fin, .8); ctx.beginPath(); ctx.ellipse(-.05 * L, 0, .09 * L, .045 * L, 0, 0, 7); ctx.fill(); ctx.restore();
+  const ex = .33 * L, ey = -.07 * L; ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgb(60,30,20)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ex, ey, .062 * L, 0, 7); ctx.fill(); ctx.stroke();
+  const look = clamp((f.tx - f.x) * f.dir / 200, -1, 1);
+  ctx.fillStyle = "rgb(15,15,25)"; ctx.beginPath(); ctx.arc(ex + look * .02 * L, ey + .004 * L, .032 * L, 0, 7); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ex + look * .02 * L + .01 * L, ey - .008 * L, .01 * L, 0, 7); ctx.fill();
+  ctx.strokeStyle = "rgb(150,40,30)"; ctx.lineWidth = 2;
+  if (f.persona === "grumpy") { arcQt(.46 * L, .06 * L, .04 * L, .03 * L, 20, 140); ctx.strokeStyle = "rgb(60,30,20)"; ctx.beginPath(); ctx.moveTo(ex - .06 * L, ey - .09 * L); ctx.lineTo(ex + .06 * L, ey - .05 * L); ctx.stroke(); }
+  else arcQt(.46 * L, .03 * L, .04 * L, .03 * L, 200, 140);
+  ctx.fillStyle = "rgba(255,120,130,.43)"; ctx.beginPath(); ctx.ellipse(.30 * L, .05 * L, .04 * L, .025 * L, 0, 0, 7); ctx.fill();
+  ctx.restore();
+  if (f !== world.guppy) { ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.fillText(f.name, f.x, f.y + .34 * L * bh + 16); ctx.textAlign = "left"; }
+}
+
+function draw() {
+  const { w, h, dpr, t } = world, u = U(), fl = floorY();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = lin(0, 0, 0, h, [[0, "rgb(70,190,230)"], [.45, "rgb(25,110,175)"], [1, "rgb(8,40,90)"]]); ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 6; i++) { const x0 = (i + .5) / 6 * w + Math.sin(t * .4 + i) * 40, sw = Math.sin(t * .3 + i * 1.7) * 60; ctx.fillStyle = lin(0, 0, 0, fl, [[0, "rgba(255,255,255,.18)"], [1, "rgba(255,255,255,0)"]]); ctx.beginPath(); ctx.moveTo(x0 - 30, 0); ctx.lineTo(x0 + 30, 0); ctx.lineTo(x0 + 120 + sw, fl); ctx.lineTo(x0 - 80 + sw, fl); ctx.fill(); }
+  ctx.fillStyle = lin(0, fl - 10, 0, h, [[0, "rgb(224,196,140)"], [1, "rgb(150,120,80)"]]); ctx.beginPath(); ctx.moveTo(0, h); for (let x = 0; x <= w + 10; x += 10) ctx.lineTo(x, fl + Math.sin(x * .015) * 6); ctx.lineTo(w, h); ctx.fill();
+  for (const pb of pebbles) { ctx.fillStyle = rgba(pb.col); ctx.beginPath(); ctx.ellipse(pb.x * w, fl + 10 + pb.y * (h - fl - 14), pb.r * u, pb.r * u * .7, 0, 0, 7); ctx.fill(); }
+  for (const pl of plants) paintPlant(pl.x * w, fl, pl.h * h, pl.col, pl.off, u);
+  paintCastle(w * .30, fl + 6, u);
+  for (const r of rocks) paintRock(r.x * w, fl + 8, r.s * u);
+  for (const it of world.items) paintItem(it, u);
+  for (const b of world.bubbles) paintBubble(b, u);
+  for (const f of world.flakes) { ctx.fillStyle = `rgba(240,190,70,${1 - f.rest / 3})`; ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(t * 2 + f.ph); ctx.beginPath(); ctx.ellipse(0, 0, 4, 2.5, 0, 0, 7); ctx.fill(); ctx.restore(); }
+  for (const f of [...world.fish].sort((a, b) => a.pal.size - b.pal.size)) paintFish(f, u);
+  for (const p of world.particles) { const age = t - p.t; ctx.fillStyle = `rgba(255,120,160,${1 - age / 1.6})`; ctx.font = "20px sans-serif"; ctx.fillText(p.ch, p.x + Math.sin(age * 5) * 10, p.y - age * 50); }
+  ctx.fillStyle = lin(0, 0, 0, 14, [[0, "rgba(255,255,255,.75)"], [1, "rgba(180,235,255,.16)"]]); ctx.beginPath(); ctx.moveTo(0, 0); for (let x = 0; x <= w + 8; x += 8) ctx.lineTo(x, 8 + Math.sin(x * .02 + t * 1.6) * 3 + Math.sin(x * .05 - t) * 1.5); ctx.lineTo(w, 0); ctx.fill();
+  if (world.flash) { ctx.fillStyle = `rgba(255,255,255,${.28 * world.flash})`; ctx.fillRect(0, 0, w, h); ctx.strokeStyle = `rgba(255,255,255,${.6 * world.flash})`; ctx.lineWidth = 3; const rr = (1 - world.flash) * 120 * u + 20; ctx.beginPath(); ctx.ellipse(world.guppy.x, world.guppy.y, rr, rr * .6, 0, 0, 7); ctx.stroke(); }
+  if (world.dark) { ctx.fillStyle = rad(world.guppy.x, world.guppy.y, 260 * u, [[0, "rgba(0,0,25,.24)"], [1, "rgba(0,0,18,.88)"]]); ctx.fillRect(0, 0, w, h); }
+  positionBubbles();
+  $("hud-eaten").textContent = "🍽 " + world.eaten; $("hud-mood").textContent = "mood: " + moodOf(world.guppy); $("hud-fish").textContent = "🐠 " + world.fish.length;
+}
+
+function positionBubbles() {
+  const now = performance.now(), box = $("tankbox");
+  for (const f of world.fish) {
+    if (!f.el) { f.el = document.createElement("div"); f.el.className = "bubble"; box.appendChild(f.el); }
+    const on = f.say && now < f.sayUntil;
+    f.el.classList.toggle("show", !!on); if (!on) continue;
+    if (f.el.textContent !== f.say) f.el.textContent = f.say;
+    const bw = f.el.offsetWidth, bh = f.el.offsetHeight, sz = 110 * U() * f.pal.size;
+    let bx = clamp(f.x - bw / 2, 8, world.w - bw - 8), by = f.y - sz - bh, below = by < 24; if (below) by = f.y + sz * .75;
+    f.el.classList.toggle("below", below); f.el.style.setProperty("--tx", clamp(f.x - bx, 18, bw - 18) + "px");
+    f.el.style.transform = `translate(${bx}px,${by}px)`; f.el.style.borderColor = f.persona === "grumpy" ? "#c04040" : f.persona === "shy" ? "#9a6fd0" : f.persona === "greedy" ? "#d08a28" : f.persona === "cheerful" ? "#3aa35c" : "#28507a";
+  }
+}
+let last = performance.now(), acc = 0;
+function frame(now) { acc += Math.min(100, now - last); last = now; while (acc >= 16.67) { tick(); acc -= 16.67; } draw(); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+
+// ═══════════════════════════════════════════════════════════════════
+//  Chat + UI
+// ═══════════════════════════════════════════════════════════════════
+let target = world.guppy, busy = new Set();
+const FOOD_WORDS = ["food", "eat", "hungry", "flake", "feed", "snack", "dinner", "breakfast"];
+function logLine(who, text, cls = "") { const log = $("log"); log.hidden = false; const d = document.createElement("div"); d.className = cls; const b = document.createElement("b"); b.textContent = who + "> "; d.append(b, document.createTextNode(text)); log.appendChild(d); log.scrollTop = log.scrollHeight; }
+function setTarget(f) { target = f; $("target").classList.toggle("show", f !== world.guppy); $("target-name").textContent = f.name; $("msg").placeholder = f === world.guppy ? "Say something to Guppy…  (click a fish to talk to it)" : `Say something to ${f.name}…`; }
+$("target").onclick = () => setTarget(world.guppy);
+
+async function ask(fish, text, { echo = false } = {}) {
+  if (!session || busy.has(fish.name)) return;
+  busy.add(fish.name); say(fish, "…", 60);
+  if (echo) logLine("you", text, "u");
+  try { const r = await reply(fish, text); say(fish, r, 7); logLine(fish.name, r); } finally { busy.delete(fish.name); }
+}
 async function send() {
-  const input = document.getElementById("user-input");
-  const text = input.value.trim();
-  if (!text || !session) return;
-
-  // Switch from sample pills to chat view on first message
-  if (!chatStarted) {
-    chatStarted = true;
-    document.getElementById("samples").classList.add("hidden");
-    document.getElementById("chat").classList.remove("hidden");
-  }
-
-  input.value = "";
-  input.disabled = true;
-  document.getElementById("send-btn").disabled = true;
-
-  addMessage("user", text);
-  const typing = addTyping();
-
-  const prompt = `<|im_start|>user\n${text}<|im_end|>\n<|im_start|>assistant\n`;
-  const inputIds = tokenizer.encode(prompt);
-
-  const outputIds = await generate(inputIds);
-  let reply = tokenizer.decode(outputIds).trim();
-
-  if (reply.includes("<|im_end|>")) reply = reply.split("<|im_end|>")[0];
-  if (reply.includes("<|im_start|>")) reply = reply.split("<|im_start|>")[0];
-  reply = reply.trim() || "blub.";
-
-  typing.remove();
-  addMessage("fish", reply);
-
-  input.disabled = false;
-  document.getElementById("send-btn").disabled = false;
-  input.focus();
+  const inp = $("msg"); let text = inp.value.trim(); if (!text) return; inp.value = "";
+  let who = target; const m = text.match(/^@(\w+)\s+(.+)/);
+  if (m) { const f = world.fish.find(x => x.name === m[1].toLowerCase()); if (f) { who = f; text = m[2]; } }
+  if (FOOD_WORDS.some(w => text.toLowerCase().includes(w))) dropFood(6);
+  ask(who, text, { echo: true });
 }
-window.send = send;
-
-// ── UI helpers ──────────────────────────────────────────────────────
-function addMessage(role, text) {
-  const chat = document.getElementById("chat");
-  const div = document.createElement("div");
-  div.className = `msg ${role}`;
-
-  const emoji = document.createElement("span");
-  emoji.className = "emoji";
-  emoji.textContent = role === "user" ? "\u{1F9D1}" : "\u{1F420}";
-
-  const body = document.createElement("div");
-  body.className = "body";
-  const label = document.createElement("div");
-  label.className = "label";
-  label.textContent = role === "user" ? "you" : "guppy";
-  body.appendChild(label);
-  body.appendChild(document.createTextNode(text));
-
-  div.appendChild(emoji);
-  div.appendChild(body);
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
-  return div;
-}
-
-function addTyping() {
-  const chat = document.getElementById("chat");
-  const div = document.createElement("div");
-  div.className = "typing";
-  div.textContent = "\u{1F420} guppy is thinking...";
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
-  return div;
-}
-
-document.getElementById("user-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+$("send").onclick = send; $("msg").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+["hi guppy", "what's in your tank", "are you hungry", "do you like bubbles", "tell me a story", "my name is sam", "what's my name", "do you have friends"].forEach(t => {
+  const b = document.createElement("span"); b.className = "pill"; b.textContent = t; b.onclick = () => { if (session) { $("msg").value = t; send(); } }; $("pills").appendChild(b);
 });
 
-// ── Topics hint popup ───────────────────────────────────────────────
-const TOPICS = [
-  ["greetings", "hi guppy"], ["food", "are you hungry"], ["temperature", "is it cold today"],
-  ["water", "how is the water"], ["bubbles", "do you like bubbles"], ["light", "is it bright"],
-  ["night", "goodnight guppy"], ["dreams", "what do you dream about"], ["jokes", "tell me a joke"],
-  ["love", "do you love me"], ["loneliness", "do you get lonely"], ["meaning of life", "what is the meaning of life"],
-  ["cats", "the cat is looking at you"], ["rain", "it is raining outside"], ["music", "do you like music"],
-  ["feelings", "are you happy"], ["swimming", "do you like swimming"], ["plants", "tell me about your plants"],
-  ["colors", "what is your favorite color"], ["memory", "do you remember me"],
-  ["glass tapping", "sorry i tapped the glass"], ["reflection", "who is that fish in the glass"],
-  ["size", "are you small"], ["scared", "are you scared"], ["bored", "are you bored"],
-  ["intelligence", "are you smart"], ["friends", "do you have friends"], ["sleep", "are you tired"],
-  ["time", "what time is it"], ["outside", "what is outside the tank"],
-  ["noise", "it is loud today"], ["visitors", "someone new is here"], ["singing", "can you sing"],
-  ["age", "how old are you"], ["name", "what is your name"], ["weather", "how is the weather"],
-  ["future", "what will you do tomorrow"], ["past", "what did you do today"],
-  ["filter", "do you hear the filter"], ["algae", "is there algae"],
-  ["snails", "are there snails in the tank"], ["health", "are you feeling ok"],
-  ["excited", "are you excited"], ["curious", "what are you curious about"],
-  ["taste", "what does the water taste like"], ["breathing", "how do you breathe"],
-  ["TV", "do you watch tv"], ["children", "do you like children"],
-  ["seasons", "what season is it"], ["fear", "what are you afraid of"],
-];
+canvas.addEventListener("pointerdown", (e) => {
+  const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  for (const f of [...world.fish].reverse()) if (Math.hypot(x - f.x, y - f.y) < 70 * U() * f.pal.size) { setTarget(f); $("msg").focus(); return; }
+  if (y < floorY()) dropFood(5, x);
+});
+canvas.addEventListener("dblclick", () => tap());
+function tap() { world.flash = 1; world.fish.forEach(f => f.dash = 70); ask(world.guppy, pick(["tap tap tap", "i tapped the glass", "knock knock"])); }
+$("b-feed").onclick = () => { dropFood(); ask(world.guppy, pick(["want some food?", "dinner time", "here comes some food", "snack time"])); };
+$("b-drop").onclick = () => { const n = $("item").value; world.items.push({ name: n, x: rand(80, world.w - 140), y: 20, ph: rand(0, 6) }); world.guppy.tx = world.items.at(-1).x; world.guppy.ty = floorY() - 120; ask(world.guppy, pick([`i put a new ${n} in the tank`, `i got you a ${n}`, `look. a ${n}`])); };
+$("b-clear").onclick = () => { if (world.items.length) { world.items = []; ask(world.guppy, "i took everything out"); } };
+$("b-add").onclick = () => {
+  if (world.fish.length >= 4) return;
+  const taken = new Set(world.fish.map(f => f.name)), f = newFish(pick(NAMES.filter(n => !taken.has(n))), pick(SPECIES.filter(s => s !== "guppy")), pick(PERSONAS), rand(80, world.w - 80), rand(60, floorY() - 100));
+  world.fish.push(f); burst(10); ask(f, "who are you"); setTimeout(() => ask(world.guppy, pick(["meet your new tank mate", "i got you a new friend"])), 900);
+};
+$("b-rm").onclick = () => { if (world.fish.length > 1) { const f = world.fish.pop(); f.el && f.el.remove(); if (target === f) setTarget(world.guppy); } };
+document.querySelectorAll("[data-trick]").forEach(b => b.onclick = () => { const n = b.dataset.trick; startTrick(n); ask(world.guppy, pick(TRICK_PROMPTS[n])); });
+$("b-tap").onclick = tap;
+$("b-light").onclick = () => { world.dark = !world.dark; $("b-light").classList.toggle("on", world.dark); ask(world.guppy, world.dark ? "the light is off now" : "the light is on now"); };
+$("b-forget").onclick = () => { for (const k of Object.keys(histories)) delete histories[k]; say(world.guppy, "what were we talking about. i forgot.", 5); logLine("·", "memory cleared"); };
 
-document.getElementById("hint-btn").addEventListener("click", () => {
-  const overlay = document.getElementById("topics-overlay");
-  overlay.innerHTML = "";
-  overlay.classList.remove("hidden");
+// fish-to-fish banter every 30-60s when there are friends
+(function banterLoop() {
+  setTimeout(async () => {
+    try {
+      if (session && world.fish.length > 1 && !busy.size && !world.dark) {
+        const [a, b] = [...world.fish].sort(() => Math.random() - .5).slice(0, 2); busy.add(a.name); busy.add(b.name);
+        const op = pick(OPENERS); say(a, op, 3.4); logLine(a.name, op);
+        const r1 = await reply(b, op, { remember: false }); say(b, r1, 3.6); logLine(b.name, r1);
+        await new Promise(r => setTimeout(r, 3300));
+        const r2 = await reply(a, r1, { remember: false }); say(a, r2, 3.6); logLine(a.name, r2);
+        busy.delete(a.name); busy.delete(b.name);
+      }
+    } catch (e) { busy.clear(); }
+    banterLoop();
+  }, rand(30000, 60000));
+})();
 
-  const box = document.createElement("div");
-  box.id = "topics-box";
-  box.innerHTML = "<h3>&#x1F420; Guppy knows 60 topics — click one to ask</h3>";
-
-  const grid = document.createElement("div");
-  grid.className = "topics";
-  for (const [label, msg] of TOPICS) {
-    const btn = document.createElement("button");
-    btn.className = "topic";
-    btn.textContent = label;
-    btn.addEventListener("click", () => {
-      overlay.classList.add("hidden");
-      document.getElementById("user-input").value = msg;
-      send();
-    });
-    grid.appendChild(btn);
-  }
-  box.appendChild(grid);
-
-  const close = document.createElement("button");
-  close.className = "close-btn";
-  close.textContent = "close";
-  close.addEventListener("click", () => overlay.classList.add("hidden"));
-  box.appendChild(close);
-
-  overlay.appendChild(box);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.classList.add("hidden");
+// ═══════════════════════════════════════════════════════════════════
+//  Educational panels
+// ═══════════════════════════════════════════════════════════════════
+const esc = (s) => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function showTrace(prompt, nTok, trace) {
+  $("seen").innerHTML = esc(prompt).replace(/&lt;\|im_(start|end)\|&gt;/g, '<span class="tok">$&</span>')
+    .replace(/(<span class="tok">&lt;\|im_start\|&gt;<\/span>)(system\n[^]*?)(<span class="tok">&lt;\|im_end\|&gt;<\/span>)/g, '$1<span class="sys">$2</span>$3')
+    .replace(/(<span class="tok">&lt;\|im_start\|&gt;<\/span>)(user\n[^]*?)(<span class="tok">&lt;\|im_end\|&gt;<\/span>)/g, '$1<span class="usr">$2</span>$3')
+    .replace(/(<span class="tok">&lt;\|im_start\|&gt;<\/span>)(assistant\n)$/, '$1<span class="ast">$2▍</span>');
+  const pct = Math.min(100, nTok / CFG.max_seq_len * 100);
+  $("ctx-bar").style.width = pct + "%"; $("ctx-text").textContent = `${nTok} / ${CFG.max_seq_len} tokens of context used (older turns are dropped when it fills up)`;
+  const box = $("trace"); box.innerHTML = "";
+  trace.forEach(s => {
+    const c = document.createElement("span"); c.className = "chip"; const txt = s.id === CFG.eos_id ? "⏎ end" : (tokenizer.tokText(s.id).replace(/\n/g, "↵") || "·");
+    c.textContent = txt; c.style.background = `color-mix(in srgb, var(--accent) ${Math.round(s.p * 70)}%, var(--code))`;
+    c.title = s.alts.map(a => `${(a.p * 100).toFixed(0)}%  ${JSON.stringify(a.id === CFG.eos_id ? "<end>" : tokenizer.tokText(a.id))}`).join("\n"); box.appendChild(c);
   });
-});
+  const avg = trace.reduce((a, s) => a + s.p, 0) / Math.max(1, trace.length);
+  $("trace-meta").textContent = `${trace.length} tokens generated · average confidence ${(avg * 100).toFixed(0)}% · one forward pass of the whole network per token`;
+}
+function renderTokenizer() {
+  if (!tokenizer) return; const text = $("tk-in").value, ids = tokenizer.encode(text), box = $("tk-out"); box.innerHTML = "";
+  ids.forEach(id => { const c = document.createElement("span"); c.className = "chip"; c.textContent = tokenizer.tokText(id).replace(/ /g, "␣").replace(/\n/g, "↵"); const s = document.createElement("small"); s.textContent = id; c.appendChild(s); box.appendChild(c); });
+  $("tk-meta").textContent = `${text.length} characters → ${ids.length} tokens (vocabulary of ${CFG.vocab_size})`;
+}
+$("tk-in").addEventListener("input", renderTokenizer);
+
+loadModel();
 </script>
 </body>
 </html>
