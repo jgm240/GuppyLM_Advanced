@@ -1655,6 +1655,8 @@ def generate_dataset(n_samples=60000, eval_ratio=0.05):
         gen_weather, gen_sleep, gen_friends, gen_joke, gen_fear, gen_love,
         gen_age, gen_smart, gen_poop, gen_doctor, gen_singing, gen_tv,
     ]
+    from .more_topics import NEW_TOPICS  # fork: extra lessons (lazy: avoids circular import)
+    topics = topics + NEW_TOPICS
     w = 1.0 / len(topics)
     generators = [(g, w) for g in topics]
 

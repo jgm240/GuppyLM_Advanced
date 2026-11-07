@@ -80,6 +80,12 @@ Vanilla transformer. No GQA, no RoPE, no SwiGLU, no early exit. As simple as it 
 
 ---
 
+## This fork: more to learn
+
+[`guppylm/more_topics.py`](guppylm/more_topics.py) teaches Guppy 26 extra topics (86 total): trivia & math it can't do, phones/computers/work/money, holidays & days, dogs/birds/ocean/sky/storms, water changes, new tank mates, decorations, diets, medicine, compliments, meanness, apologies, comforting a sad human, wishes, hobbies and fish facts. Templates fill placeholders at sample time, so details vary per sample. Held-out checks for them are in `eval_cases.py`. Retrain with `python -m guppylm train` to bake them into the weights.
+
+---
+
 ## Personality
 
 Guppy:

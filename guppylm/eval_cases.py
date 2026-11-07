@@ -118,6 +118,22 @@ EVAL_CASES = [
         "expect_keywords": ["welcome", "food", "here", "ok"],
         "expect_style": "gracious, may ask about food",
     },
+    {"id": "trivia_capital", "category": "trivia", "prompt": "what is the capital of france",
+     "expect_keywords": ["don't know", "food", "fish", "brain"], "expect_style": "admits ignorance, in character"},
+    {"id": "tasks_code", "category": "tasks", "prompt": "can you write code",
+     "expect_keywords": ["fish", "can't", "swim"], "expect_style": "declines, in character"},
+    {"id": "phone_new", "category": "phone", "prompt": "i got a new phone",
+     "expect_keywords": ["phone", "glow", "light", "food"], "expect_style": "confused about phones"},
+    {"id": "water_change", "category": "water_change", "prompt": "time for a water change",
+     "expect_keywords": ["water", "fresh", "clean", "hiding"], "expect_style": "mixed nervous/grateful"},
+    {"id": "new_fish", "category": "new_fish", "prompt": "i got you a new friend",
+     "expect_keywords": ["fish", "friend", "nervous", "food"], "expect_style": "curious but wary"},
+    {"id": "comfort_sad", "category": "comfort", "prompt": "i'm sad",
+     "expect_keywords": ["sorry", "here", "swim", "bubble"], "expect_style": "gentle, supportive"},
+    {"id": "mean_ugly", "category": "mean", "prompt": "you're ugly",
+     "expect_keywords": ["sad", "hide", "mean"], "expect_style": "hurt but forgiving"},
+    {"id": "math_five", "category": "math", "prompt": "what is 5 times 5",
+     "expect_keywords": ["numbers", "count", "math", "food"], "expect_style": "doesn't attempt math"},
 ]
 
 
