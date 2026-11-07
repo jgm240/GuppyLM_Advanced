@@ -12,6 +12,7 @@ import contextlib
 import json
 import os
 import random
+import re
 import threading
 
 from .world import fact_samples, format_world, random_state, state_text, subject_of
@@ -21,6 +22,10 @@ CANNED = ["bubbles. i love bubbles.", "is that food. it is food. yes.", "the wat
 
 DEFAULT_STATE = {"you": {"name": "guppy", "species": None, "persona": None},
                  "items": [], "mates": [], "mood": "happy", "doing": "swimming"}
+
+
+IDENT_RE = re.compile(r"who are you|what are you|your name|what kind of fish|what species|what type of fish|"
+                      r"introduce yourself|who am i talking to|tell me about yourself", re.I)
 
 
 class Brain:
@@ -62,13 +67,27 @@ class Brain:
         hist = self.histories.setdefault(fish, [])
         msgs = [{"role": "system", "content": state_text(st)}] + hist + [{"role": "user", "content": text}]
         recent = self.recent.setdefault(fish, [])
-        reply = ""
-        for attempt in range(5):               # don't repeat the last few replies: resample, a bit hotter each time
+        you = st["you"]
+        need = []                              # identity questions must mention the fish's real name (and species)
+        if IDENT_RE.search(text):
+            need = [you["name"]] + ([you["species"]] if you.get("species") else [])
+        reply, fallback = "", None
+        for attempt in range(8):               # resample until fresh (not a recent repeat) and grounded
             with self.lock:
-                out = self.engine.chat_completion(msgs, temperature=0.8 + 0.12 * attempt, top_k=60)
+                out = self.engine.chat_completion(msgs, temperature=0.8 + 0.06 * attempt, top_k=60)
             reply = out["choices"][0]["message"]["content"] or "..."
-            if reply not in recent:
+            grounded = all(n.lower() in reply.lower() for n in need)
+            if grounded and reply not in recent:
                 break
+            if grounded and fallback is None:
+                fallback = reply
+        else:
+            reply = fallback or reply
+            if need:                           # the model couldn't ground itself: introduce from the state line
+                flavour = {"cheerful": "so happy to meet you.", "grumpy": "don't ask me stuff.", "shy": "um. hi.",
+                           "greedy": "got any food."}.get(you.get("persona"), "")
+                reply = (f"i'm {you['name']}. i'm a {you['species']}. {flavour}" if you.get("species")
+                         else f"i'm {you['name']}. i live in this tank.").strip()
         recent.append(reply)
         del recent[:-10]
         if remember:

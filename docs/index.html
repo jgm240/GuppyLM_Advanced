@@ -236,7 +236,7 @@ yes. so hungry. please feed me.</span><span class="tok">&lt;|im_end|&gt;</span><
     <div class="card"><h3>🎓 Teaching it (desktop app)</h3>
       <p>In the desktop client, <code>/train "Money is a currency."</code> turns a fact into practice chats and genuinely fine-tunes the weights for a minute, mixing in old data so it doesn’t forget how to be a fish.</p></div>
   </div>
-  <div class="note">Honest limits: this is a ~9M model, so it sometimes garbles names, miscounts what’s in the tank, or answers a neighbouring question. The model on this page is <b id="model-info">…</b>.</div>
+  <div class="note">Honest limits: this is a ~9M model, so it sometimes garbles names, miscounts what’s in the tank, or answers a neighbouring question. If it can’t introduce itself correctly after 8 tries, the page falls back to a plain template built from the state line. The model on this page is <b id="model-info">…</b>.</div>
 </section>
 
 <section id="run">
@@ -426,12 +426,22 @@ async function reply(fish, text, { remember = true } = {}) {
   const hist = histories[fish.name] = histories[fish.name] || [];
   const msgs = fit([{ role: "system", content: stateText(fish) }, ...hist, { role: "user", content: text }], CFG.max_seq_len - 48);
   const prompt = fmtMsgs(msgs), ids = tokenizer.encode(prompt), seen = recent[fish.name] = recent[fish.name] || [];
-  let best = null;
-  for (let a = 0; a < 4; a++) {
-    const r = await generate(ids, GEN.temperature + 0.12 * a);
+  // identity questions must mention the fish's real name (and species): resample otherwise
+  const need = /who are you|what are you|your name|what kind of fish|what species|what type of fish|introduce yourself|who am i talking to|tell me about yourself/i.test(text)
+    ? [fish.name, ...(fish === world.guppy ? [] : [fish.species])] : [];
+  let best = null, fallback = null;
+  for (let a = 0; a < 8; a++) {
+    const r = await generate(ids, GEN.temperature + 0.06 * a);
     let t = tokenizer.decode(r.ids).split("<|im_end|>")[0].split("<|im_start|>")[0].trim() || "blub.";
-    best = { text: t, trace: r.trace };
-    if (!seen.includes(t)) break;
+    const cand = { text: t, trace: r.trace }, grounded = need.every(n => t.toLowerCase().includes(n));
+    best = cand;
+    if (grounded && !seen.includes(t)) { fallback = null; break; }
+    if (grounded && !fallback) fallback = cand;
+    if (a === 7 && fallback) best = fallback;
+  }
+  if (need.length && !need.every(n => best.text.toLowerCase().includes(n))) {   // couldn't ground itself: introduce from the state line
+    const fl = { cheerful: "so happy to meet you.", grumpy: "don't ask me stuff.", shy: "um. hi.", greedy: "got any food." }[fish.persona] || "";
+    best = { text: (fish === world.guppy ? `i'm ${fish.name}. i live in this tank.` : `i'm ${fish.name}. i'm a ${fish.species}. ${fl}`).trim(), trace: best.trace };
   }
   seen.push(best.text); seen.splice(0, Math.max(0, seen.length - 10));
   if (remember) { hist.push({ role: "user", content: text }, { role: "assistant", content: best.text }); hist.splice(0, Math.max(0, hist.length - 12)); }

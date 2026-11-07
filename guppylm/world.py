@@ -135,13 +135,27 @@ def state_qa(s):
 
 def identity_qa(s):
     you = s["you"]
-    u = random.choice(["who are you", "what's your name", "what are you", "what kind of fish are you", "introduce yourself"])
-    if you.get("persona"):
+    persona = you.get("persona")
+    qs = ["who are you", "what's your name", "what are you", "what kind of fish are you", "introduce yourself",
+          "what species are you", "tell me about yourself", "who am i talking to", "what's your name again",
+          "what type of fish are you"]
+    if persona:
+        sp = you["species"]
         flavour = {"cheerful": "so happy to meet you.", "grumpy": "don't ask me stuff.",
-                   "shy": "um. hi.", "greedy": "got any food."}[you["persona"]]
-        return u, f"i'm {you['name']}. i'm a {you['species']}. {flavour}", "mate_identity"
-    return u, random.choice(["i'm guppy. a small fish with a small brain.", "guppy. that's me. i like food and bubbles.",
-                             "i'm guppy. i live in this tank."]), "mate_identity"
+                   "shy": "um. hi.", "greedy": "got any food."}[persona]
+        wrong = random.choice([x for x in SPECIES if x != sp])
+        kind = random.random()
+        if kind < 0.25:                                        # "are you a betta?"
+            if random.random() < 0.5:
+                return f"are you a {sp}", f"yes. i'm {you['name']}. i'm a {sp}. {flavour}", "mate_identity"
+            return f"are you a {wrong}", f"no. i'm {you['name']}. i'm a {sp}. {flavour}", "mate_identity"
+        if kind < 0.4:
+            return random.choice(["what's your name", "what are you called"]), f"i'm {you['name']}. {flavour}", "mate_identity"
+        if kind < 0.55:
+            return random.choice(["what kind of fish are you", "what species are you"]), f"i'm a {sp}. {flavour}", "mate_identity"
+        return random.choice(qs), f"i'm {you['name']}. i'm a {sp}. {flavour}", "mate_identity"
+    return random.choice(qs), random.choice(["i'm guppy. a small fish with a small brain.", "guppy. that's me. i like food and bubbles.",
+                                             "i'm guppy. i live in this tank."]), "mate_identity"
 
 
 # ── new topics ───────────────────────────────────────────────────────────────
@@ -343,7 +357,7 @@ def make_world_dialogue(topics, state=None, max_extra=3):
         if random.random() < 0.5:
             u, a, c = state_qa(s)
             add(u, a, c)
-    elif r < 0.30:
+    elif r < (0.36 if persona else 0.28):
         u, a, c = identity_qa(s)
         add(u, a, c)
     elif persona and r < 0.62:                    # a tank mate speaking in its own voice
