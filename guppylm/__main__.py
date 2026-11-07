@@ -58,7 +58,10 @@ def main():
 
     elif cmd == "world-data":
         from .world import generate_world_data
-        generate_world_data()
+        if "--long" in sys.argv:       # long-context mix (data_long/): 384-token chats + long-range recall
+            generate_world_data(22000, 4000, out_dir="data_long", n_long=10000)
+        else:
+            generate_world_data()
 
     elif cmd == "context-data":
         from .multiturn import generate_context_data

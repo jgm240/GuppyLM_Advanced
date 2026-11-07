@@ -24,6 +24,7 @@ DEFAULT_STATE = {"you": {"name": "guppy", "species": None, "persona": None},
                  "items": [], "mates": [], "mood": "happy", "doing": "swimming"}
 
 
+WORD_RE = re.compile(r"[a-z]+(?:'[a-z]+)?")
 IDENT_RE = re.compile(r"who are you|what are you|your name|what kind of fish|what species|what type of fish|"
                       r"introduce yourself|who am i talking to|tell me about yourself", re.I)
 
@@ -57,6 +58,28 @@ class Brain:
             from .model import load_state_compat
             load_state_compat(self.engine.model, torch.load(self.user_weights, map_location="cpu"))
 
+    def _known_words(self):
+        """Words Guppy has ever been trained to say (+ words from taught lessons)."""
+        if getattr(self, "_vocab", None) is None:
+            import collections
+            cnt = collections.Counter()
+            if os.path.exists(self.replay_path):
+                with open(self.replay_path) as f:
+                    for line in f:
+                        t = json.loads(line)["text"]
+                        for m in re.finditer(r"<\|im_start\|>assistant\n(.*?)<\|im_end\|>", t, re.S):
+                            cnt.update(WORD_RE.findall(m.group(1).lower()))
+            self._vocab = {w for w, c in cnt.items() if c >= 2}
+        return self._vocab
+
+    def _clean(self, reply, prompt_text):
+        """False if the reply contains a word that is neither in the training vocabulary nor in the prompt (garbled)."""
+        vocab = self._known_words()
+        if not vocab:
+            return True
+        allowed = vocab | set(WORD_RE.findall(prompt_text.lower())) | {w for l in self.lessons for w in WORD_RE.findall(l.lower())}
+        return all(w in allowed for w in WORD_RE.findall(reply.lower()))
+
     # ── chatting ────────────────────────────────────────────────────────
     def reply(self, text, state=None, fish="guppy", remember=True):
         st = state or DEFAULT_STATE
@@ -71,28 +94,31 @@ class Brain:
         need = []                              # identity questions must mention the fish's real name (and species)
         if IDENT_RE.search(text):
             need = [you["name"]] + ([you["species"]] if you.get("species") else [])
-        reply, fallback = "", None
-        for attempt in range(8):               # resample until fresh (not a recent repeat) and grounded
-            with self.lock:
-                out = self.engine.chat_completion(msgs, temperature=0.8 + 0.06 * attempt, top_k=60)
-            reply = out["choices"][0]["message"]["content"] or "..."
-            grounded = all(n.lower() in reply.lower() for n in need)
-            if grounded and reply not in recent:
+        prompt_text = " ".join(m["content"] for m in msgs)
+        best, rank = "", -1                   # prefer: grounded + fresh + clean > grounded + clean > clean > anything
+        for attempt in range(8):
+            with self.lock:                   # a little hotter on retries, but capped: hot sampling makes junk
+                out = self.engine.chat_completion(msgs, temperature=min(0.95, 0.8 + 0.03 * attempt), top_k=60)
+            cand = out["choices"][0]["message"]["content"] or "..."
+            clean = self._clean(cand, prompt_text)
+            grounded = all(n.lower() in cand.lower() for n in need)
+            score = (2 if clean else 0) * 2 + (1 if grounded else 0) * 2 + (1 if cand not in recent else 0) if clean or grounded else (1 if cand not in recent else 0)
+            if clean and grounded and cand not in recent:
+                best = cand
                 break
-            if grounded and fallback is None:
-                fallback = reply
-        else:
-            reply = fallback or reply
-            if need:                           # the model couldn't ground itself: introduce from the state line
-                flavour = {"cheerful": "so happy to meet you.", "grumpy": "don't ask me stuff.", "shy": "um. hi.",
-                           "greedy": "got any food."}.get(you.get("persona"), "")
-                reply = (f"i'm {you['name']}. i'm a {you['species']}. {flavour}" if you.get("species")
-                         else f"i'm {you['name']}. i live in this tank.").strip()
+            if score > rank:
+                best, rank = cand, score
+        reply = best
+        if need and not all(n.lower() in reply.lower() for n in need):   # still not grounded: introduce from the state line
+            flavour = {"cheerful": "so happy to meet you.", "grumpy": "don't ask me stuff.", "shy": "um. hi.",
+                       "greedy": "got any food."}.get(you.get("persona"), "")
+            reply = (f"i'm {you['name']}. i'm a {you['species']}. {flavour}" if you.get("species")
+                     else f"i'm {you['name']}. i live in this tank.").strip()
         recent.append(reply)
         del recent[:-10]
         if remember:
             hist += [{"role": "user", "content": text}, {"role": "assistant", "content": reply}]
-            del hist[:-12]
+            del hist[:-40]
         return reply
 
     def forget(self, fish=None):

@@ -16,7 +16,8 @@ import random
 from . import generate_data as gd
 from .generate_data import FOOD_TYPES
 from .more_topics import NEW_TOPICS, _fill, _topic2
-from .multiturn import FOLLOWUPS, ELABORATE, NAMES, THINGS, _recall
+from .multiturn import (FOLLOWUPS, ELABORATE, NAMES, THINGS, _recall, NAME_SET, NAME_ACK, NAME_ASK, NAME_ANS,
+                        THING_SET, THING_ACK, THING_ASK, THING_ANS, FOOD_SET, FOOD_ACK, FOOD_ASK, FOOD_ANS)
 
 ITEM_NAMES = ["rock", "log", "shell", "castle", "chest", "anchor", "plant", "skull", "snail",
               "ball", "bridge", "mirror", "pebble"]
@@ -330,7 +331,7 @@ def all_topics():
 
 # ── dialogues ───────────────────────────────────────────────────────────────
 
-def make_world_dialogue(topics, state=None, max_extra=3):
+def make_world_dialogue(topics, state=None, n_extra=None):
     """Returns (state, [(user, guppy)...], category). Replies are persona-coloured."""
     s = state or random_state()
     persona = s["you"].get("persona")
@@ -367,7 +368,7 @@ def make_world_dialogue(topics, state=None, max_extra=3):
         smp = gen()
         add(smp["input"], smp["output"], smp["category"])
 
-    for _ in range(random.choice([0, 1, 1, 2, 3])):
+    for _ in range(random.choice([0, 1, 1, 2, 3]) if n_extra is None else n_extra):
         last_u, last_a = turns[-1]
         base = last_a
         mode = random.choices(
@@ -406,6 +407,25 @@ def make_world_dialogue(topics, state=None, max_extra=3):
             smp = gen_ack()
             add(smp["input"], smp["output"], "ack")
     return s, turns, cats[-1]
+
+
+def long_recall(s, topics):
+    """State a fact, chat about 3-7 other things, then ask for it back (needs a long context)."""
+    persona = s["you"].get("persona")
+    pc = lambda t: persona_say(t, persona)
+    kind = random.choice(["name", "name", "thing", "food"])
+    if kind == "name":
+        v = {"n": random.choice(NAMES)}; sets, acks, asks, ans = NAME_SET, NAME_ACK, NAME_ASK, NAME_ANS
+    elif kind == "thing":
+        v = {"t": random.choice(THINGS)}; sets, acks, asks, ans = THING_SET, THING_ACK, THING_ASK, THING_ANS
+    else:
+        v = {"f": random.choice(FOOD_TYPES)}; sets, acks, asks, ans = FOOD_SET, FOOD_ACK, FOOD_ASK, FOOD_ANS
+    turns = [(random.choice(sets).format(**v), pc(random.choice(acks).format(**v)))]
+    for _ in range(random.randint(3, 7)):
+        smp = random.choice(topics)()
+        turns.append((smp["input"], pc(smp["output"])))
+    turns.append((random.choice(asks), pc(random.choice(ans).format(**v))))
+    return turns, "long_recall_" + kind
 
 
 def format_world(s, turns):
@@ -455,12 +475,19 @@ def fact_samples(fact, n=40, state_fn=random_state):
 
 # ── dataset writer ──────────────────────────────────────────────────────────
 
-def generate_world_data(n_dialogues=30000, n_single=6000, eval_ratio=0.04, out_dir="data_world"):
+def generate_world_data(n_dialogues=30000, n_single=6000, eval_ratio=0.04, out_dir="data_world", n_long=0):
     topics = all_topics()
     rows = []
     for _ in range(n_dialogues):
         s, turns, cat = make_world_dialogue(topics)
         rows.append({"text": format_world(s, turns), "category": "w_" + cat})
+    for _ in range(n_long):                    # long chats (5-9 turns) and long-range recall
+        s = random_state()
+        if random.random() < 0.45:
+            turns, cat = long_recall(s, topics)
+        else:
+            s, turns, cat = make_world_dialogue(topics, state=s, n_extra=random.randint(4, 8))
+        rows.append({"text": format_world(s, turns), "category": "long_" + cat})
     for _ in range(n_single):
         s = random_state()
         smp = random.choice(topics)()

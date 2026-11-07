@@ -33,6 +33,7 @@ class GuppyInference:
         if os.path.exists(config_path):
             with open(config_path) as f:
                 cfg = json.load(f)
+            cfg = cfg.get("model", cfg)      # train.py writes {"model": {...}, "train": {...}}
             # Support both HF standard keys and our own keys
             self.config = GuppyConfig(
                 vocab_size=cfg.get("vocab_size", 4096),
