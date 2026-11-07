@@ -7,6 +7,20 @@ from torch.utils.data import Dataset, DataLoader
 from tokenizers import Tokenizer
 
 
+def encode_example(tokenizer, text, max_len):
+    """Token ids plus the length of the system/state prefix (excluded from the loss)."""
+    ids = tokenizer.encode(text).ids[:max_len]
+    skip = 0
+    if text.startswith("<|im_start|>system") and "<|im_start|>user" in text:
+        skip = len(tokenizer.encode(text.split("<|im_start|>user")[0]).ids)
+    return ids, skip
+
+
+def example_to_xy(ids, skip):
+    return (torch.tensor(ids[:-1], dtype=torch.long),
+            torch.tensor([0] * skip + ids[1:][skip:], dtype=torch.long))
+
+
 class GuppyDataset(Dataset):
     def __init__(self, path: str, tokenizer_path: str, max_len: int = 512):
         self.tokenizer = Tokenizer.from_file(tokenizer_path)
@@ -16,19 +30,23 @@ class GuppyDataset(Dataset):
         with open(path) as f:
             for line in f:
                 data = json.loads(line)
-                ids = self.tokenizer.encode(data["text"]).ids
+                text = data["text"]
+                ids = self.tokenizer.encode(text).ids
+                skip = 0
+                if text.startswith("<|im_start|>system") and "<|im_start|>user" in text:
+                    skip = len(self.tokenizer.encode(text.split("<|im_start|>user")[0]).ids)
                 if len(ids) > max_len:
                     ids = ids[:max_len]
                 if len(ids) >= 2:
-                    self.samples.append(ids)
+                    self.samples.append((ids, skip))
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        ids = self.samples[idx]
+        ids, skip = self.samples[idx]
         x = ids[:-1]
-        y = ids[1:]
+        y = [0] * skip + ids[1:][skip:]      # don't train on the (random) state line
         return torch.tensor(x, dtype=torch.long), torch.tensor(y, dtype=torch.long)
 
 

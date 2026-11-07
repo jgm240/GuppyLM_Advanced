@@ -127,3 +127,18 @@ class GuppyLM(nn.Module):
     def param_summary(self):
         total, _ = self.param_count()
         return f"GuppyLM: {total:,} params ({total/1e6:.1f}M)"
+
+
+def load_state_compat(model, state):
+    """Load a state dict, growing learned position embeddings if the checkpoint is shorter."""
+    state = dict(state)
+    key = "pos_emb.weight"
+    if key in state and state[key].shape[0] != model.pos_emb.weight.shape[0]:
+        old, new = state[key], model.pos_emb.weight.detach().clone()
+        n = min(old.shape[0], new.shape[0])
+        new[:n] = old[:n].to(new.device)
+        for i in range(n, new.shape[0]):       # extra positions start as copies of earlier ones
+            new[i] = old[i % old.shape[0]].to(new.device)
+        state[key] = new
+    own = model.state_dict()
+    model.load_state_dict({k: v for k, v in state.items() if k in own})

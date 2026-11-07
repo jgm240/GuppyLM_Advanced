@@ -55,7 +55,8 @@ class GuppyInference:
 
         self.model = GuppyLM(self.config).to(self.device)
         filtered = {k: v for k, v in state_dict.items() if k in self.model.state_dict()}
-        self.model.load_state_dict(filtered)
+        from .model import load_state_compat
+        load_state_compat(self.model, filtered)
         self.model.eval()
 
         total, _ = self.model.param_count()
@@ -64,6 +65,8 @@ class GuppyInference:
     def chat_completion(self, messages, temperature=0.7, max_tokens=64,
                         top_k=50, **kwargs):
         """Chat completion — takes messages, returns response."""
+        max_tokens = min(max_tokens, 48)
+        messages = self._fit(messages, self.config.max_seq_len - max_tokens)
         prompt = self._format_prompt(messages)
         input_ids = self.tokenizer.encode(prompt).ids
         prompt_tokens = len(input_ids)
@@ -84,6 +87,14 @@ class GuppyInference:
                 "message": {"role": "assistant", "content": resp_text},
             }],
         }
+
+    def _fit(self, messages, budget):
+        """Drop the oldest user/assistant exchanges until the prompt fits the context window."""
+        head = [m for m in messages[:1] if m.get("role") == "system"]   # keep the state line
+        msgs = list(messages[len(head):])
+        while len(msgs) > 1 and len(self.tokenizer.encode(self._format_prompt(head + msgs)).ids) > budget:
+            msgs = msgs[2:] if len(msgs) > 2 else msgs[1:]
+        return head + msgs
 
     def _format_prompt(self, messages):
         parts = []
@@ -111,15 +122,24 @@ def main():
         print(result["choices"][0]["message"]["content"])
         return
 
-    print("\nGuppy Chat (type 'quit' to exit)")
+    print("\nGuppy Chat (type 'quit' to exit, 'reset' to make Guppy forget)")
+    history = []
     while True:
         inp = input("\nYou> ").strip()
         if inp.lower() in ("quit", "exit", "q"):
             break
-        result = engine.chat_completion([{"role": "user", "content": inp}])
+        if inp.lower() == "reset":
+            history = []
+            print("Guppy> what were we talking about. i forgot.")
+            continue
+        history.append({"role": "user", "content": inp})
+        result = engine.chat_completion(history)
         msg = result["choices"][0]["message"]
         if msg.get("content"):
             print(f"Guppy> {msg['content']}")
+            history.append({"role": "assistant", "content": msg["content"]})
+        else:
+            history.pop()
 
 
 if __name__ == "__main__":

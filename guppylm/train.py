@@ -45,9 +45,23 @@ def evaluate(model, loader, device, max_batches=50):
     return total_loss / max(1, n)
 
 
-def train():
+def train(argv=None):
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--init", help="start from this checkpoint (fine-tune)")
+    ap.add_argument("--data", help="data dir (train.jsonl, eval.jsonl, tokenizer.json)")
+    ap.add_argument("--out", help="output dir for checkpoints")
+    ap.add_argument("--steps", type=int)
+    ap.add_argument("--lr", type=float)
+    args = ap.parse_args(argv)
     mc = GuppyConfig()
     tc = TrainConfig()
+    if args.data: tc.data_dir = args.data
+    if args.out: tc.output_dir = args.out
+    if args.steps: tc.max_steps = args.steps
+    if args.lr:
+        tc.learning_rate = args.lr
+        tc.min_lr = args.lr / 10
     device = get_device(tc)
     torch.manual_seed(tc.seed)
 
@@ -55,6 +69,11 @@ def train():
 
     tokenizer_path = os.path.join(tc.data_dir, "tokenizer.json")
     model = GuppyLM(mc).to(device)
+    if args.init:
+        ck = torch.load(args.init, map_location=device, weights_only=False)
+        from .model import load_state_compat
+        load_state_compat(model, ck["model_state_dict"] if "model_state_dict" in ck else ck)
+        print(f"Initialised from {args.init}")
     print(model.param_summary())
 
     train_loader = get_dataloader(

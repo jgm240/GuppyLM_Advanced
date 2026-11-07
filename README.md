@@ -84,6 +84,28 @@ Vanilla transformer. No GQA, no RoPE, no SwiGLU, no early exit. As simple as it 
 
 [`guppylm/more_topics.py`](guppylm/more_topics.py) teaches Guppy 26 extra topics (86 total): trivia & math it can't do, phones/computers/work/money, holidays & days, dogs/birds/ocean/sky/storms, water changes, new tank mates, decorations, diets, medicine, compliments, meanness, apologies, comforting a sad human, wishes, hobbies and fish facts. Templates fill placeholders at sample time, so details vary per sample. Held-out checks for them are in `eval_cases.py`. Retrain with `python -m guppylm train` to bake them into the weights.
 
+### guppytank: an aquarium client
+
+```bash
+python -m guppylm tank        # colored ASCII tank (terminal)
+python -m guppylm tank-gui    # smooth Qt aquarium (pip install PySide6-Essentials)
+```
+
+Chat with Guppy while it swims. Guppy knows what is in its tank and how it feels, keeps the conversation going, and can be taught.
+
+| Command | What it does |
+|---|---|
+| `/give_flake [n]`, `/drop_in <thing>`, `/remove <thing\|all>` | feed Guppy, add or remove objects |
+| `/tap`, `/bubbles`, `/clean`, `/light on\|off` | poke the tank |
+| `/add_fish [species] [name]`, `@name hi`, `/remove_fish <name>` | tank mates with their own personalities (GUI) |
+| `/trick [spin\|loop\|jump\|dance]` | tricks (GUI) |
+| `/event [snail\|storm\|blackout\|shadow\|feeder\|current]` | tank events (GUI) |
+| `/train "Money is a currency."` | really fine-tunes the model on a new fact; `/lessons`, `/untrain` |
+| `/forget`, `/help` | reset memory, show help |
+
+Training data for the world-aware model comes from `python -m guppylm world-data` (state line, mates, follow-ups), then
+`python -m guppylm train --init checkpoints/best_model.pt --data data_world --out checkpoints_world --steps 6000 --lr 1.5e-4`.
+
 ---
 
 ## Personality

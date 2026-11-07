@@ -53,3 +53,12 @@ Desktop.ini
 *.log
 *.tmp
 *.bak
+.venv/
+data/
+checkpoints/
+train.log
+__pycache__/
+
+# fork: extra training artifacts
+checkpoints_*/
+data_*/

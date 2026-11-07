@@ -6,7 +6,7 @@ from dataclasses import dataclass
 @dataclass
 class GuppyConfig:
     vocab_size: int = 4096
-    max_seq_len: int = 128
+    max_seq_len: int = 192
     d_model: int = 384
     n_layers: int = 6
     n_heads: int = 6
